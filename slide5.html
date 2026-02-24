@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Slide 5 — The Stress Test: Systemic Fragility</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080808;color:#fff;font-family:'Inter',sans-serif;width:1280px;height:720px;overflow:hidden;position:relative}
+
+/* subtle noise */
+body::before{content:'';position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0}
+
+/* glow behind fragility side */
+.glow-r{position:absolute;right:0;top:50%;transform:translateY(-50%);width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(239,68,68,.07) 0%,transparent 70%);pointer-events:none;z-index:0}
+.glow-l{position:absolute;left:0;top:50%;transform:translateY(-50%);width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(34,197,94,.05) 0%,transparent 70%);pointer-events:none;z-index:0}
+
+/* header */
+.hdr{position:absolute;top:24px;left:0;right:0;text-align:center;z-index:10}
+.act-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:rgba(255,255,255,.3);text-transform:uppercase;margin-bottom:5px}
+h1{font-size:24px;font-weight:800;letter-spacing:-.4px}
+h1 span{color:#ef4444}
+.sub{font-size:12px;color:rgba(255,255,255,.35);margin-top:4px;font-weight:300;letter-spacing:.02em}
+
+/* ── MAIN GRID ── */
+.main{position:absolute;top:88px;left:30px;right:30px;bottom:100px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;z-index:5}
+
+/* each group block */
+.group-block{display:flex;flex-direction:column;align-items:center;gap:0;position:relative}
+
+.group-label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px;text-align:center}
+.group-race{font-size:10px;color:rgba(255,255,255,.4);margin-bottom:10px;text-align:center;letter-spacing:.02em}
+
+/* figure grid */
+.fig-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;width:100%;flex:1}
+
+/* single figure */
+.fig{display:flex;flex-direction:column;align-items:center;gap:1px;opacity:0;transition:opacity .4s ease, filter .4s ease}
+.fig.visible{opacity:1}
+.fig.faded{opacity:.15;filter:grayscale(.8)}
+.fig.cracking{animation:crack 1.2s ease forwards}
+
+@keyframes crack{
+  0%{opacity:1;filter:none}
+  30%{filter:brightness(1.5) saturate(2)}
+  60%{opacity:.7;filter:blur(.5px) brightness(.8)}
+  100%{opacity:.18;filter:grayscale(1) blur(.8px)}
+}
+
+.fig-body{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center}
+
+.fig-label-bottom{font-size:8.5px;color:rgba(255,255,255,.35);text-align:center;font-family:'JetBrains Mono',monospace}
+
+/* stat footer */
+.stat-footer{margin-top:8px;text-align:center;width:100%}
+.ret-rate{font-size:22px;font-weight:800;letter-spacing:-.5px;line-height:1}
+.ret-label{font-size:10px;color:rgba(255,255,255,.35);margin-top:1px;letter-spacing:.02em}
+.impact-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-top:6px;border:1px solid}
+.impact-badge.pos{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#86efac}
+.impact-badge.neg-mild{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:#fcd34d}
+.impact-badge.neg-severe{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35);color:#fca5a5}
+.impact-badge.critical{background:rgba(239,68,68,.2);border-color:#ef4444;color:#fff}
+
+/* divider between resilient / fragile */
+.section-divider{position:absolute;top:88px;bottom:20px;left:50%;width:1px;background:linear-gradient(to bottom,transparent,rgba(255,255,255,.12) 20%,rgba(255,255,255,.12) 80%,transparent);z-index:6}
+.divider-badge{position:absolute;top:88px;left:50%;transform:translateX(-50%);z-index:7;background:#080808;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:5px 14px;font-size:9px;letter-spacing:.15em;color:rgba(255,255,255,.3);text-transform:uppercase;font-family:'JetBrains Mono',monospace;white-space:nowrap}
+
+/* acute event flash */
+.acute-flash{position:absolute;top:88px;left:0;right:0;bottom:20px;background:rgba(239,68,68,.06);border-radius:6px;pointer-events:none;opacity:0;z-index:4}
+
+/* replay */
+.replay-btn{position:absolute;bottom:8px;right:30px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;padding:7px 16px;border:1px solid rgba(255,255,255,.2);border-radius:4px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);cursor:pointer;transition:all .2s;z-index:20}
+.replay-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+
+/* phase label */
+.phase-label{position:absolute;top:90px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.12em;color:rgba(255,255,255,.3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;z-index:8;white-space:nowrap;opacity:0;transition:opacity .5s}
+
+.key-insight{position:absolute;bottom:8px;left:30px;right:180px;background:#120808;border:1.5px solid #ef4444;border-radius:6px;padding:10px 18px;font-size:12px;line-height:1.5;z-index:20;opacity:0;transition:opacity .8s ease;box-shadow:0 0 28px rgba(239,68,68,.2)}
+.key-insight.visible{opacity:1}
+.key-insight strong{color:#f87171}
+</style>
+</head>
+<body>
+<div class="glow-r"></div>
+<div class="glow-l"></div>
+
+<div class="hdr">
+  <div class="act-label">Act III · The Stress Test</div>
+  <h1>Same Crisis — <span>Different Outcomes</span></h1>
+  <div class="sub">When an acute medical event strikes in Week 1 — who does the system catch?</div>
+</div>
+
+<div class="section-divider"></div>
+<div class="divider-badge" id="divBadge">← Resilient &nbsp;|&nbsp; Fragile →</div>
+
+<div class="main" id="mainGrid"></div>
+
+<div class="key-insight" id="keyInsight">
+  An acute event <strong>stabilizes or improves</strong> outcomes for White patients — the system catches them. For <strong>Black patients, the same crisis triggers collapse</strong>. The AI has quantified systemic inequity.
+</div>
+
+<button class="replay-btn" onclick="runAnimation()">↺ REPLAY</button>
+
+<script>
+// Data from the PDF
+const groups = [
+  {
+    id:'wm', label:'White · Male', race:'White',
+    n:456, retention:78.3,
+    impact:+0.5, impactClass:'pos',
+    color:'#60a5fa', acuteRate:41.0,
+    resilient: true,
+  },
+  {
+    id:'wf', label:'White · Female', race:'White',
+    n:604, retention:77.2,
+    impact:+9.9, impactClass:'pos',
+    color:'#93c5fd', acuteRate:31.0,
+    resilient: true,
+  },
+  {
+    id:'bam', label:'Black · Male', race:'Black/AA',
+    n:246, retention:72.4,
+    impact:-8.8, impactClass:'neg-severe',
+    color:'#f97316', acuteRate:56.9,
+    resilient: false,
+  },
+  {
+    id:'baf', label:'Black · Female', race:'Black/AA',
+    n:162, retention:82.1,
+    impact:-14.9, impactClass:'critical',
+    color:'#ef4444', acuteRate:48.1,
+    resilient: false,
+  },
+];
+
+// SVG person path — simple human icon
+function personSVG(color, size=28) {
+  const s = size;
+  return `<svg width="${s}" height="${s+8}" viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="6" r="4.5" fill="${color}"/>
+    <path d="M4 28 C4 20 8 16 12 16 C16 16 20 20 20 28" fill="${color}"/>
+    <rect x="9" y="15" width="6" height="12" rx="2" fill="${color}"/>
+  </svg>`;
+}
+
+function buildGrid() {
+  const grid = document.getElementById('mainGrid');
+  grid.innerHTML = '';
+
+  groups.forEach(g => {
+    const block = document.createElement('div');
+    block.className = 'group-block';
+    block.id = `block_${g.id}`;
+
+    // Header
+    const lbl = document.createElement('div');
+    lbl.className = 'group-label';
+    lbl.style.color = g.color;
+    lbl.textContent = g.label;
+    block.appendChild(lbl);
+
+    const race = document.createElement('div');
+    race.className = 'group-race';
+    race.textContent = `N=${g.n.toLocaleString()} · ${g.acuteRate}% had acute event`;
+    block.appendChild(race);
+
+    // Figure grid — show proportional to retention
+    const figGrid = document.createElement('div');
+    figGrid.className = 'fig-grid';
+    figGrid.id = `figs_${g.id}`;
+    const total = 20; // 20 figures = each represents ~5%
+    const retained = Math.round(g.retention / 100 * total);
+
+    for (let i = 0; i < total; i++) {
+      const fig = document.createElement('div');
+      fig.className = 'fig';
+      fig.id = `fig_${g.id}_${i}`;
+      fig.innerHTML = `<div class="fig-body">${personSVG(g.color, 26)}</div>`;
+      figGrid.appendChild(fig);
+    }
+    block.appendChild(figGrid);
+
+    // Stats
+    const footer = document.createElement('div');
+    footer.className = 'stat-footer';
+    footer.id = `footer_${g.id}`;
+    footer.innerHTML = `
+      <div class="ret-rate" style="color:${g.color}" id="rate_${g.id}">—</div>
+      <div class="ret-label">Retained at 90 Days</div>
+      <div class="impact-badge ${g.impactClass}" id="impact_${g.id}" style="opacity:0">
+        ${g.impact > 0 ? '↑' : '↓'} ${Math.abs(g.impact)}% after acute event
+      </div>
+    `;
+    block.appendChild(footer);
+    grid.appendChild(block);
+  });
+}
+
+let anim = null;
+function runAnimation() {
+  if (anim) clearTimeout(anim);
+  buildGrid();
+  document.getElementById('keyInsight').classList.remove('visible');
+
+  // Phase 1: Figures appear one by one per group
+  let delay = 200;
+  groups.forEach(g => {
+    const total = 20;
+    const retained = Math.round(g.retention / 100 * total);
+    for (let i = 0; i < total; i++) {
+      setTimeout((idx, gId) => {
+        const el = document.getElementById(`fig_${gId}_${idx}`);
+        if (el) el.classList.add('visible');
+      }, delay, i, g.id);
+      delay += 35;
+    }
+    delay += 80;
+  });
+
+  // Phase 2: Show retention rates
+  delay += 200;
+  groups.forEach(g => {
+    setTimeout((gId, ret, col) => {
+      const el = document.getElementById(`rate_${gId}`);
+      if (el) { el.textContent = ret + '%'; }
+    }, delay, g.id, g.retention, g.color);
+    delay += 120;
+  });
+
+  // Phase 3: "Acute Event" flash
+  const acuteDelay = delay + 400;
+  setTimeout(() => {
+    // Create flash overlay
+    const flash = document.createElement('div');
+    flash.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(239,68,68,.15);z-index:50;pointer-events:none;border-radius:4px;transition:opacity .6s`;
+    flash.id = 'acuteFlash';
+    document.getElementById('mainGrid').appendChild(flash);
+
+    // Flash text
+    const txt = document.createElement('div');
+    txt.style.cssText = `position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:.1em;color:#ef4444;text-transform:uppercase;text-shadow:0 0 30px rgba(239,68,68,.8);z-index:51;pointer-events:none;white-space:nowrap;`;
+    txt.textContent = '⚡ ACUTE MEDICAL EVENT';
+    flash.appendChild(txt);
+
+    setTimeout(() => { flash.style.opacity = '0'; setTimeout(() => flash.remove(), 600); }, 900);
+  }, acuteDelay);
+
+  // Phase 4: Resilient groups stay bright, fragile figures fade/crack
+  const postAcuteDelay = acuteDelay + 1200;
+  setTimeout(() => {
+    groups.forEach(g => {
+      const total = 20;
+      const retained = Math.round(g.retention / 100 * total);
+
+      if (!g.resilient) {
+        // Fade out the "lost" figures with stagger
+        const impactLost = Math.round(Math.abs(g.impact) / 100 * total);
+        for (let i = retained; i >= Math.max(0, retained - impactLost - 2); i--) {
+          setTimeout((idx, gId) => {
+            const el = document.getElementById(`fig_${gId}_${idx}`);
+            if (el) { el.classList.add('cracking'); }
+          }, (retained - i) * 120, i, g.id);
+        }
+      }
+
+      // Show impact badge
+      setTimeout(() => {
+        const badge = document.getElementById(`impact_${g.id}`);
+        if (badge) { badge.style.opacity = '1'; badge.style.transition = 'opacity .5s'; }
+      }, g.resilient ? 400 : 1200);
+    });
+  }, postAcuteDelay);
+
+  // Phase 5: Key insight
+  setTimeout(() => {
+    document.getElementById('keyInsight').classList.add('visible');
+  }, postAcuteDelay + 2200);
+}
+
+window.addEventListener('load', () => { setTimeout(runAnimation, 300); });
+</script>
+</body>
+</html>
