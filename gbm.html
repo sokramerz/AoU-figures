@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Slide 2 — Moving Beyond Linear Assumptions</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#060608;color:#fff;font-family:'Inter',sans-serif;width:1280px;height:720px;overflow:hidden;position:relative}
+
+.bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);background-size:48px 48px;pointer-events:none}
+
+/* HEADER */
+.header{position:absolute;top:0;left:0;right:0;padding:22px 60px 0;z-index:10;text-align:center}
+.act-tag{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:rgba(255,255,255,.3);text-transform:uppercase;margin-bottom:6px}
+h1{font-size:26px;font-weight:800;letter-spacing:-.4px}
+h1 em{font-style:italic;font-weight:300;color:rgba(255,255,255,.4)}
+
+/* MAIN PANELS */
+.panels{position:absolute;top:82px;left:30px;right:30px;bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}
+
+.panel{position:relative;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.07)}
+.panel-left{background:rgba(255,255,255,.02)}
+.panel-right{background:rgba(34,197,94,.02)}
+
+/* panel glow */
+.panel-left::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 80%,rgba(239,68,68,.06) 0%,transparent 70%);pointer-events:none}
+.panel-right::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,rgba(34,197,94,.07) 0%,transparent 70%);pointer-events:none}
+
+/* panel headers */
+.panel-header{position:absolute;top:0;left:0;right:0;padding:14px 20px;display:flex;align-items:flex-start;justify-content:space-between;z-index:5}
+.model-name{font-size:15px;font-weight:700;margin-bottom:2px}
+.model-sub{font-family:'JetBrains Mono',monospace;font-size:10px;opacity:.45;letter-spacing:.06em}
+
+.accuracy-badge{font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 10px;border-radius:4px;font-weight:500;opacity:0;transition:opacity .6s ease}
+.accuracy-badge.visible{opacity:1}
+
+/* bottom bullet */
+.panel-verdict{position:absolute;bottom:0;left:0;right:0;padding:12px 20px;font-size:12px;font-weight:500;letter-spacing:.01em;border-top:1px solid rgba(255,255,255,.06);z-index:5;opacity:0;transition:opacity .8s ease;backdrop-filter:blur(4px)}
+.panel-verdict.visible{opacity:1}
+
+/* feature callouts */
+.callout-pill{position:absolute;font-size:10px;font-family:'JetBrains Mono',monospace;padding:4px 10px;border-radius:20px;border:1px solid;white-space:nowrap;opacity:0;transition:opacity .5s ease;z-index:6;pointer-events:none}
+.callout-pill.visible{opacity:1}
+
+/* replay */
+.replay-btn{position:absolute;bottom:28px;right:48px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;padding:7px 16px;border:1px solid rgba(255,255,255,.18);border-radius:4px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);cursor:pointer;transition:all .2s;z-index:30}
+.replay-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+
+/* misclassified shake */
+@keyframes missShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+.miss-shake{animation:missShake .4s ease}
+
+/* boundary draw */
+@keyframes drawIn{from{stroke-dashoffset:var(--len)}to{stroke-dashoffset:0}}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<div class="header">
+  <div class="act-tag">Slide 2 · Model Architecture</div>
+  <h1>Moving Beyond <em>Linear</em> Assumptions</h1>
+</div>
+
+<div class="panels">
+  <!-- LEFT: Logistic Regression -->
+  <div class="panel panel-left" id="panelLeft">
+    <div class="panel-header">
+      <div>
+        <div class="model-name" style="color:#60a5fa">Logistic Regression</div>
+        <div class="model-sub">LINEAR &amp; ADDITIVE</div>
+      </div>
+      <div class="accuracy-badge" id="badgeL" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5">ROC-AUC 0.71</div>
+    </div>
+    <svg id="svgLeft" width="100%" height="100%"></svg>
+    <!-- callouts -->
+    <div class="callout-pill" id="cpL1" style="top:20%;left:8%;border-color:rgba(239,68,68,.4);color:#fca5a5;background:rgba(239,68,68,.1)">Misclassified high-risk</div>
+    <div class="callout-pill" id="cpL2" style="bottom:22%;right:8%;border-color:rgba(239,68,68,.4);color:#fca5a5;background:rgba(239,68,68,.1)">Cannot detect cliffs</div>
+    <div class="panel-verdict" id="verdictL" style="background:rgba(239,68,68,.08);color:#fca5a5">✗ Assumes Risk A + Risk B = Total Risk &nbsp;·&nbsp; Misses non-linear interactions</div>
+  </div>
+
+  <!-- RIGHT: Gradient Boosting -->
+  <div class="panel panel-right" id="panelRight">
+    <div class="panel-header">
+      <div>
+        <div class="model-name" style="color:#4ade80">Gradient Boosted Trees</div>
+        <div class="model-sub">NON-LINEAR &amp; INTERACTING</div>
+      </div>
+      <div class="accuracy-badge" id="badgeR" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#86efac">ROC-AUC 0.922</div>
+    </div>
+    <svg id="svgRight" width="100%" height="100%"></svg>
+    <!-- callouts -->
+    <div class="callout-pill" id="cpR1" style="top:20%;right:8%;border-color:rgba(34,197,94,.4);color:#86efac;background:rgba(34,197,94,.08)">Detects cliff drop-offs</div>
+    <div class="callout-pill" id="cpR2" style="bottom:22%;left:8%;border-color:rgba(34,197,94,.4);color:#86efac;background:rgba(34,197,94,.08)">Learns informative missingness</div>
+    <div class="panel-verdict" id="verdictR" style="background:rgba(34,197,94,.07);color:#86efac">✓ Maps true clinical reality &nbsp;·&nbsp; Non-linear · Interacting · Missing-data aware</div>
+  </div>
+</div>
+
+<button class="replay-btn" onclick="runAll()">↺ REPLAY</button>
+
+<script>
+// Seeded pseudo-random for reproducibility
+function mulberry32(seed){
+  return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}
+}
+const rng = mulberry32(42);
+
+// Generate data: two overlapping classes with a non-linear boundary
+function genData(n){
+  const pts = [];
+  for(let i=0;i<n;i++){
+    const x = rng()*2-1;
+    const y = rng()*2-1;
+    // non-linear true boundary: sin wave + noise
+    const boundary = 0.4*Math.sin(x*Math.PI*1.5) + 0.15*(rng()-.5);
+    const retained = y > boundary ? 1 : 0;
+    pts.push({x, y, retained});
+  }
+  return pts;
+}
+
+const DATA = genData(120);
+
+function drawPanel(svgId, mode, delay){
+  const svgEl = document.getElementById(svgId);
+  const W = svgEl.getBoundingClientRect().width || 580;
+  const H = svgEl.getBoundingClientRect().height || 580;
+  const svg = d3.select('#'+svgId);
+  svg.selectAll('*').remove();
+
+  const m = {top:52, right:20, bottom:30, left:30};
+  const iW = W - m.left - m.right;
+  const iH = H - m.top - m.bottom;
+  const g = svg.append('g').attr('transform',`translate(${m.left},${m.top})`);
+
+  const xSc = d3.scaleLinear().domain([-1,1]).range([0,iW]);
+  const ySc = d3.scaleLinear().domain([-1,1]).range([iH,0]);
+
+  // Decision region background (drawn first)
+  const res = 60;
+  const cellW = iW/res, cellH = iH/res;
+
+  if(mode === 'linear'){
+    // Linear decision region: just two halves
+    for(let xi=0;xi<res;xi++){
+      for(let yi=0;yi<res;yi++){
+        const xv = (xi/res)*2-1;
+        const yv = (yi/res)*2-1;
+        // logistic: linear boundary y = 0.3x - 0.1
+        const pred = yv > (0.3*xv - 0.1) ? 1 : 0;
+        g.append('rect')
+          .attr('x', xi*cellW).attr('y', yi*cellH)
+          .attr('width', cellW+.5).attr('height', cellH+.5)
+          .style('fill', pred===1 ? 'rgba(96,165,250,.07)' : 'rgba(239,68,68,.07)')
+          .style('opacity',0)
+          .transition().delay(delay+300).duration(400)
+          .style('opacity',1);
+      }
+    }
+  } else {
+    // Non-linear regions
+    for(let xi=0;xi<res;xi++){
+      for(let yi=0;yi<res;yi++){
+        const xv = (xi/res)*2-1;
+        const yv = (yi/res)*2-1;
+        const pred = yv > 0.4*Math.sin(xv*Math.PI*1.5) ? 1 : 0;
+        g.append('rect')
+          .attr('x', xi*cellW).attr('y', yi*cellH)
+          .attr('width', cellW+.5).attr('height', cellH+.5)
+          .style('fill', pred===1 ? 'rgba(74,222,128,.07)' : 'rgba(239,68,68,.07)')
+          .style('opacity',0)
+          .transition().delay(delay+300).duration(400)
+          .style('opacity',1);
+      }
+    }
+  }
+
+  // axes
+  g.append('line').attr('x1',0).attr('x2',iW).attr('y1',iH/2).attr('y2',iH/2)
+    .style('stroke','rgba(255,255,255,.12)').style('stroke-width',.5);
+  g.append('line').attr('x1',iW/2).attr('x2',iW/2).attr('y1',0).attr('y2',iH)
+    .style('stroke','rgba(255,255,255,.12)').style('stroke-width',.5);
+
+  // axis labels
+  g.append('text').attr('x',iW-4).attr('y',iH/2-6).attr('text-anchor','end')
+    .style('fill','rgba(255,255,255,.2)').style('font-size','9px')
+    .style('font-family','JetBrains Mono, monospace').text('visits_14d →');
+  g.append('text').attr('transform',`translate(${iW/2+6},6)`).attr('text-anchor','start')
+    .style('fill','rgba(255,255,255,.2)').style('font-size','9px')
+    .style('font-family','JetBrains Mono, monospace').text('↑ retention prob.');
+
+  // decision boundary
+  if(mode === 'linear'){
+    const x1v = -1, y1v = 0.3*(-1)-0.1;
+    const x2v = 1,  y2v = 0.3*(1)-0.1;
+    const lineEl = g.append('line')
+      .attr('x1', xSc(x1v)).attr('y1', ySc(y1v))
+      .attr('x2', xSc(x1v)).attr('y2', ySc(y1v))
+      .style('stroke','#60a5fa').style('stroke-width',2.5).style('stroke-linecap','round');
+    lineEl.transition().delay(delay+600).duration(900).ease(d3.easeCubicInOut)
+      .attr('x2', xSc(x2v)).attr('y2', ySc(y2v));
+
+    g.append('text').attr('x',xSc(.7)).attr('y',ySc(0.3*.7-.1)-10)
+      .style('fill','rgba(96,165,250,.7)').style('font-size','10px')
+      .style('font-family','JetBrains Mono, monospace').style('opacity',0)
+      .text('linear boundary')
+      .transition().delay(delay+1500).duration(400).style('opacity',1);
+
+  } else {
+    // curved boundary
+    const nPts = 100;
+    const boundaryPts = d3.range(nPts).map(i => {
+      const xv = (i/(nPts-1))*2-1;
+      const yv = 0.4*Math.sin(xv*Math.PI*1.5);
+      return [xSc(xv), ySc(yv)];
+    });
+    const lineGen = d3.line().curve(d3.curveCatmullRom.alpha(0.5));
+    const pathEl = g.append('path').datum(boundaryPts)
+      .attr('d', lineGen)
+      .style('fill','none').style('stroke','#4ade80')
+      .style('stroke-width', 2.5).style('stroke-linecap','round');
+    const len = pathEl.node().getTotalLength();
+    pathEl.style('stroke-dasharray', len).style('stroke-dashoffset', len)
+      .transition().delay(delay+600).duration(1400).ease(d3.easeCubicInOut)
+      .style('stroke-dashoffset', 0);
+
+    // glow copy
+    g.append('path').datum(boundaryPts)
+      .attr('d', lineGen)
+      .style('fill','none').style('stroke','#4ade80')
+      .style('stroke-width', 8).style('opacity',.1).style('stroke-linecap','round')
+      .style('filter','blur(3px)');
+
+    g.append('text').attr('x',xSc(.3)).attr('y',ySc(0.4*Math.sin(.3*Math.PI*1.5))-12)
+      .style('fill','rgba(74,222,128,.7)').style('font-size','10px')
+      .style('font-family','JetBrains Mono, monospace').style('opacity',0)
+      .text('non-linear boundary')
+      .transition().delay(delay+2000).duration(400).style('opacity',1);
+  }
+
+  // Dots — staggered entrance
+  const color0 = mode==='linear' ? '#ef4444' : '#ef4444';
+  const color1 = mode==='linear' ? '#60a5fa' : '#4ade80';
+
+  DATA.forEach((d, i) => {
+    // check if misclassified by linear model
+    const linearPred = d.y > (0.3*d.x - 0.1) ? 1 : 0;
+    const gbPred = d.y > 0.4*Math.sin(d.x*Math.PI*1.5) ? 1 : 0;
+    const isMissLinear = linearPred !== d.retained;
+    const isMissGB = gbPred !== d.retained;
+
+    const col = d.retained === 1 ? color1 : color0;
+    const isMiss = mode==='linear' ? isMissLinear : isMissGB;
+
+    const circle = g.append('circle')
+      .attr('cx', xSc(d.x)).attr('cy', ySc(d.y))
+      .attr('r', 0)
+      .style('fill', col)
+      .style('fill-opacity', isMiss ? 0.45 : 0.88)
+      .style('stroke', isMiss ? (mode==='linear' ? 'rgba(239,68,68,.8)' : 'rgba(255,255,255,.1)') : 'rgba(0,0,0,.3)')
+      .style('stroke-width', isMiss && mode==='linear' ? 1.5 : .5);
+
+    circle.transition().delay(delay + 800 + i*8).duration(250).ease(d3.easeBackOut)
+      .attr('r', isMiss ? 5.5 : 4.5);
+
+    // X mark for misclassified on linear side
+    if(isMiss && mode==='linear'){
+      const cx2 = xSc(d.x), cy2 = ySc(d.y);
+      const cross = g.append('g').attr('transform',`translate(${cx2},${cy2})`).style('opacity',0);
+      cross.append('line').attr('x1',-4).attr('y1',-4).attr('x2',4).attr('y2',4)
+        .style('stroke','#fca5a5').style('stroke-width',1.5);
+      cross.append('line').attr('x1',4).attr('y1',-4).attr('x2',-4).attr('y2',4)
+        .style('stroke','#fca5a5').style('stroke-width',1.5);
+      cross.transition().delay(delay+1600+i*4).duration(200).style('opacity',1);
+    }
+  });
+
+  // Misclassification count
+  if(mode==='linear'){
+    const missCount = DATA.filter(d => {
+      const p = d.y > (0.3*d.x-0.1) ? 1 : 0; return p !== d.retained;
+    }).length;
+    const pct = ((missCount/DATA.length)*100).toFixed(0);
+    g.append('text').attr('x', iW/2).attr('y', iH-6).attr('text-anchor','middle')
+      .style('fill','rgba(252,165,165,.7)').style('font-size','11px')
+      .style('font-family','JetBrains Mono, monospace').style('opacity',0)
+      .text(`${missCount}/${DATA.length} misclassified (${pct}%)`)
+      .transition().delay(delay+2200).duration(500).style('opacity',1);
+  } else {
+    const missCount = DATA.filter(d => {
+      const p = d.y > 0.4*Math.sin(d.x*Math.PI*1.5) ? 1 : 0; return p !== d.retained;
+    }).length;
+    const pct = ((missCount/DATA.length)*100).toFixed(0);
+    g.append('text').attr('x', iW/2).attr('y', iH-6).attr('text-anchor','middle')
+      .style('fill','rgba(134,239,172,.7)').style('font-size','11px')
+      .style('font-family','JetBrains Mono, monospace').style('opacity',0)
+      .text(`${missCount}/${DATA.length} misclassified (${pct}%)`)
+      .transition().delay(delay+2500).duration(500).style('opacity',1);
+  }
+
+  // legend
+  const leg = g.append('g').attr('transform',`translate(8, ${iH-28})`);
+  [{col: mode==='linear'?'#60a5fa':'#4ade80', label:'Retained'},{col:'#ef4444',label:'Disengaged'}].forEach((item,i)=>{
+    const lx = i*110;
+    leg.append('circle').attr('cx',lx+5).attr('cy',4).attr('r',4).style('fill',item.col).style('opacity',.8);
+    leg.append('text').attr('x',lx+14).attr('y',8).style('fill','rgba(255,255,255,.4)').style('font-size','9px')
+      .style('font-family','JetBrains Mono, monospace').text(item.label);
+  });
+}
+
+function showCallouts(ids, d){
+  ids.forEach(id => {
+    setTimeout(()=>{ const el = document.getElementById(id); if(el) el.classList.add('visible'); }, d);
+    d += 300;
+  });
+}
+
+function runAll(){
+  // reset
+  ['badgeL','badgeR','cpL1','cpL2','cpR1','cpR2','verdictL','verdictR'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.classList.remove('visible');
+  });
+
+  drawPanel('svgLeft', 'linear', 0);
+  drawPanel('svgRight', 'nonlinear', 400);
+
+  setTimeout(()=>{ document.getElementById('badgeL').classList.add('visible'); }, 2400);
+  setTimeout(()=>{ document.getElementById('badgeR').classList.add('visible'); }, 3000);
+  showCallouts(['cpL1','cpL2'], 2600);
+  showCallouts(['cpR1','cpR2'], 3200);
+  setTimeout(()=>{ document.getElementById('verdictL').classList.add('visible'); }, 3400);
+  setTimeout(()=>{ document.getElementById('verdictR').classList.add('visible'); }, 3800);
+}
+
+window.addEventListener('load', ()=>{ setTimeout(runAll, 300); });
+</script>
+</body>
+</html>
