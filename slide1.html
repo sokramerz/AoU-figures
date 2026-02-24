@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Slide — N-1 Validation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#050608;color:#fff;font-family:'Inter',sans-serif;width:1280px;height:720px;overflow:hidden;position:relative}
+
+/* subtle radial bg */
+.bg{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 55%,rgba(99,102,241,.06) 0%,transparent 65%);pointer-events:none}
+.bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:52px 52px;pointer-events:none}
+
+/* HEADER */
+.header{position:absolute;top:0;left:0;right:0;padding:20px 60px 0;z-index:10;text-align:center}
+.act-tag{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:rgba(255,255,255,.28);text-transform:uppercase;margin-bottom:5px}
+h1{font-size:25px;font-weight:800;letter-spacing:-.4px}
+h1 em{font-style:italic;font-weight:300;color:rgba(255,255,255,.4)}
+
+/* MAIN LAYOUT */
+.main{position:absolute;top:78px;left:40px;right:40px;bottom:16px;display:grid;grid-template-columns:1fr 420px;gap:20px}
+
+/* LEFT: animation area */
+.anim-area{position:relative}
+#vizSvg{position:absolute;inset:0}
+
+/* RIGHT: stat panel */
+.stat-panel{display:flex;flex-direction:column;gap:12px;padding:4px 0;justify-content:center}
+
+.stat-block{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 16px;opacity:0;transform:translateX(18px);transition:opacity .6s ease,transform .6s ease}
+.stat-block.visible{opacity:1;transform:translateX(0)}
+.stat-block .sb-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:6px}
+.stat-block .sb-val{font-size:28px;font-weight:800;letter-spacing:-.5px;line-height:1;margin-bottom:4px}
+.stat-block .sb-desc{font-size:11px;color:rgba(255,255,255,.4);line-height:1.5}
+.stat-block .sb-desc strong{color:rgba(255,255,255,.7);font-weight:500}
+
+/* comparison table */
+.compare-table{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;overflow:hidden;opacity:0;transform:translateX(18px);transition:opacity .6s ease,transform .6s ease}
+.compare-table.visible{opacity:1;transform:translateX(0)}
+.ct-header{display:grid;grid-template-columns:1fr 1fr 1fr;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.06);font-size:9px;font-family:'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(255,255,255,.3);text-transform:uppercase}
+.ct-row{display:grid;grid-template-columns:1fr 1fr 1fr;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px}
+.ct-row:last-child{border-bottom:none}
+.ct-row .metric{color:rgba(255,255,255,.5);font-size:11px}
+.ct-row .val-bad{color:#fca5a5;font-family:'JetBrains Mono',monospace;font-weight:600}
+.ct-row .val-good{color:#86efac;font-family:'JetBrains Mono',monospace;font-weight:600}
+
+/* step counter */
+.step-counter{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:20}
+.sc-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.12);transition:all .4s;cursor:pointer}
+.sc-dot.active{background:#6366f1;transform:scale(1.4)}
+.sc-dot.done{background:rgba(99,102,241,.5)}
+
+/* replay */
+.replay-btn{position:absolute;bottom:14px;right:40px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;padding:7px 16px;border:1px solid rgba(255,255,255,.18);border-radius:4px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);cursor:pointer;transition:all .2s;z-index:30}
+.replay-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+
+/* phase label */
+#phaseLabel{position:absolute;top:8px;left:50%;transform:translateX(-50%);font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.15em;color:rgba(255,255,255,.35);text-transform:uppercase;white-space:nowrap;transition:opacity .4s}
+
+@keyframes pulseRing{0%,100%{r:22;opacity:.5}50%{r:28;opacity:.15}}
+@keyframes flowDot{0%{stroke-dashoffset:100}100%{stroke-dashoffset:0}}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="bg-grid"></div>
+
+<div class="header">
+  <div class="act-tag">Validation · Clinical Safety</div>
+  <h1>Stress-Testing for <em>Generalizability</em>: N−1 Validation</h1>
+</div>
+
+<div class="main">
+  <div class="anim-area">
+    <svg id="vizSvg" width="100%" height="100%"></svg>
+    <div id="phaseLabel">Initializing sites...</div>
+    <div class="step-counter" id="stepCounter"></div>
+  </div>
+
+  <div class="stat-panel" id="statPanel">
+    <div class="stat-block" id="sb1">
+      <div class="sb-label">The Overfitting Trap</div>
+      <div class="sb-val" style="color:#f87171">80/20</div>
+      <div class="sb-desc">Standard random split risks learning <strong>hospital-specific quirks</strong> — prescribing habits, local coding patterns — not real patient biology</div>
+    </div>
+
+    <div class="stat-block" id="sb2">
+      <div class="sb-label">Our Protocol: Leave-One-Site-Out</div>
+      <div class="sb-val" style="color:#818cf8">N−1</div>
+      <div class="sb-desc">Train on <strong>all sites except one</strong>. Test on the held-out site. Repeat for every site. Proves the signature is <strong>universal</strong>, not local.</div>
+    </div>
+
+    <div class="compare-table" id="sb3">
+      <div class="ct-header">
+        <span>Metric</span><span>Standard Split</span><span>N−1 LOSO</span>
+      </div>
+      <div class="ct-row">
+        <span class="metric">ROC-AUC</span>
+        <span class="val-bad">0.875</span>
+        <span class="val-good">0.922</span>
+      </div>
+      <div class="ct-row">
+        <span class="metric">PR-AUC</span>
+        <span class="val-bad">0.555</span>
+        <span class="val-good">0.700</span>
+      </div>
+      <div class="ct-row">
+        <span class="metric">Brier Score ↓</span>
+        <span class="val-bad">0.074</span>
+        <span class="val-good">0.063</span>
+      </div>
+      <div class="ct-row">
+        <span class="metric">Missed Dx ↓</span>
+        <span class="val-bad">3.9 / 100</span>
+        <span class="val-good">2.7 / 100</span>
+      </div>
+    </div>
+
+    <div class="stat-block" id="sb4">
+      <div class="sb-label">Why PR-AUC, not ROC-AUC</div>
+      <div class="sb-val" style="color:#34d399;font-size:22px">Class Imbalance</div>
+      <div class="sb-desc">Treatment dropout is rare (~25%). ROC-AUC inflates in imbalanced classes. <strong>PR-AUC punishes false negatives</strong>, the missed high-risk patients that matter most clinically.</div>
+    </div>
+  </div>
+</div>
+
+<button class="replay-btn" onclick="startAnim()">↺ REPLAY</button>
+
+<script>
+// Sites layout — arranged in a rough geographic cluster
+const SITES = [
+  {id:0, label:'Site A', x:.18, y:.30},
+  {id:1, label:'Site B', x:.35, y:.18},
+  {id:2, label:'Site C', x:.55, y:.22},
+  {id:3, label:'Site D', x:.70, y:.35},
+  {id:4, label:'Site E', x:.65, y:.58},
+  {id:5, label:'Site F', x:.42, y:.65},
+  {id:6, label:'Site G', x:.22, y:.60},
+  {id:7, label:'Site H', x:.10, y:.48},
+];
+
+// Each LOSO round: one test site, rest are training
+const ROUNDS = SITES.length;
+let currentRound = -1;
+let roundTimer = null;
+
+function getSvgDims(){
+  const el = document.getElementById('vizSvg');
+  return {W: el.getBoundingClientRect().width || 780, H: el.getBoundingClientRect().height || 560};
+}
+
+function sitePos(site, W, H){
+  const pad = 80;
+  return {x: pad + site.x*(W-pad*2), y: pad + site.y*(H-pad*2)};
+}
+
+function initViz(){
+  const {W, H} = getSvgDims();
+  const svg = d3.select('#vizSvg');
+  svg.selectAll('*').remove();
+
+  // Central model node
+  const cx = W*.5, cy = H*.44;
+
+  // Draw connection mesh between training sites (light)
+  svg.append('g').attr('id','mesh');
+  svg.append('g').attr('id','arrows');
+  svg.append('g').attr('id','sites');
+  svg.append('g').attr('id','modelNode');
+  svg.append('g').attr('id','testSite');
+  svg.append('g').attr('id','resultBadge');
+  svg.append('g').attr('id','phaseAnnLabel');
+
+  // Draw all sites initial state
+  const siteG = svg.select('#sites');
+  SITES.forEach(s => {
+    const {x, y} = sitePos(s, W, H);
+    const g = siteG.append('g').attr('id',`site_${s.id}`).attr('transform',`translate(${x},${y})`);
+
+    // outer ring (pulse)
+    g.append('circle').attr('class','site-ring').attr('r',22)
+      .style('fill','none').style('stroke','rgba(99,102,241,.3)').style('stroke-width',1)
+      .style('opacity',0);
+
+    // main circle
+    g.append('circle').attr('class','site-circle').attr('r',18)
+      .style('fill','rgba(99,102,241,.12)').style('stroke','rgba(99,102,241,.5)')
+      .style('stroke-width',1.5).style('opacity',0);
+
+    // icon
+    g.append('text').attr('class','site-icon').attr('y',5).attr('text-anchor','middle')
+      .style('font-size','14px').style('opacity',0).text('🏥');
+
+    // label
+    g.append('text').attr('class','site-label').attr('y',32).attr('text-anchor','middle')
+      .style('fill','rgba(255,255,255,.5)').style('font-size','10px')
+      .style('font-family','JetBrains Mono, monospace').style('opacity',0).text(s.label);
+  });
+
+  // Central AI model
+  const mG = svg.select('#modelNode');
+  mG.append('circle').attr('cx',cx).attr('cy',cy).attr('r',40)
+    .style('fill','rgba(99,102,241,.1)').style('stroke','rgba(99,102,241,.4)')
+    .style('stroke-width',2).style('opacity',0).attr('id','modelCircle');
+  mG.append('text').attr('x',cx).attr('y',cy-6).attr('text-anchor','middle')
+    .style('font-size','18px').style('opacity',0).attr('id','modelIcon').text('🤖');
+  mG.append('text').attr('x',cx).attr('y',cy+14).attr('text-anchor','middle')
+    .style('fill','#818cf8').style('font-size','11px').style('font-weight','600')
+    .style('font-family','JetBrains Mono, monospace').style('opacity',0).attr('id','modelLabel').text('AI MODEL');
+
+  // Phase label below model
+  mG.append('text').attr('x',cx).attr('y',cy+34).attr('text-anchor','middle')
+    .style('fill','rgba(255,255,255,.3)').style('font-size','9px')
+    .style('font-family','JetBrains Mono, monospace').style('letter-spacing','.1em')
+    .style('opacity',0).attr('id','roundCounter').text('');
+}
+
+function phaseAppear(){
+  const {W, H} = getSvgDims();
+  const svg = d3.select('#vizSvg');
+
+  // Appear all sites
+  SITES.forEach((s, i) => {
+    const g = svg.select(`#site_${s.id}`);
+    g.select('.site-circle').transition().delay(i*120).duration(400).style('opacity',1);
+    g.select('.site-icon').transition().delay(i*120+100).duration(300).style('opacity',1);
+    g.select('.site-label').transition().delay(i*120+200).duration(300).style('opacity',1);
+  });
+
+  // Model node appears
+  setTimeout(()=>{
+    svg.select('#modelCircle').transition().duration(500).style('opacity',1);
+    svg.select('#modelIcon').transition().duration(400).style('opacity',1);
+    svg.select('#modelLabel').transition().duration(400).style('opacity',1);
+    document.getElementById('phaseLabel').textContent = 'Initializing sites...';
+  }, 1000);
+
+  setTimeout(() => runRound(0), 1800);
+}
+
+function runRound(roundIdx){
+  if(roundIdx >= ROUNDS) {
+    showFinal();
+    return;
+  }
+  currentRound = roundIdx;
+  const {W, H} = getSvgDims();
+  const svg = d3.select('#vizSvg');
+  const cx = W*.5, cy = H*.44;
+  const testSite = SITES[roundIdx];
+  const trainSites = SITES.filter(s => s.id !== testSite.id);
+
+  // Update step dots
+  document.querySelectorAll('.sc-dot').forEach((d,i) => {
+    d.className = 'sc-dot' + (i < roundIdx ? ' done' : i === roundIdx ? ' active' : '');
+  });
+
+  document.getElementById('phaseLabel').textContent = `Round ${roundIdx+1}/${ROUNDS} — Testing on ${testSite.label}`;
+
+  // Reset all sites to training state
+  SITES.forEach(s => {
+    const g = svg.select(`#site_${s.id}`);
+    g.select('.site-circle')
+      .transition().duration(300)
+      .style('fill','rgba(99,102,241,.12)')
+      .style('stroke','rgba(99,102,241,.5)');
+    g.select('.site-icon').text('🏥');
+  });
+
+  svg.selectAll('.flow-arrow').remove();
+  svg.selectAll('.test-arrow').remove();
+
+  // Highlight test site
+  setTimeout(()=>{
+    const tp = sitePos(testSite, W, H);
+    const g = svg.select(`#site_${testSite.id}`);
+    g.select('.site-circle')
+      .transition().duration(400)
+      .style('fill','rgba(239,68,68,.2)')
+      .style('stroke','#ef4444');
+    g.select('.site-icon').text('🔬');
+
+    // Pulse ring on test site
+    svg.select(`#site_${testSite.id}`).select('.site-ring')
+      .style('opacity',0).style('r',22).style('stroke','rgba(239,68,68,.5)')
+      .transition().duration(600).style('opacity',1).attr('r',30)
+      .transition().duration(400).style('opacity',0).attr('r',22);
+
+  }, 200);
+
+  // Animate training arrows flowing TO model
+  trainSites.forEach((s, i) => {
+    const sp = sitePos(s, W, H);
+    setTimeout(()=>{
+      const path = svg.append('line').attr('class','flow-arrow')
+        .attr('x1',sp.x).attr('y1',sp.y).attr('x2',cx).attr('y2',cy)
+        .style('stroke','rgba(99,102,241,.6)').style('stroke-width',1.5)
+        .style('stroke-dasharray','5,4').style('opacity',0);
+
+      path.transition().duration(300).style('opacity',1)
+        .transition().delay(500).duration(200).style('opacity',0);
+
+      // Dot traveling along line
+      const dot = svg.append('circle').attr('class','flow-arrow')
+        .attr('cx',sp.x).attr('cy',sp.y).attr('r',3)
+        .style('fill','#818cf8').style('opacity',0);
+
+      dot.transition().duration(250).style('opacity',1)
+        .transition().duration(450).ease(d3.easeCubicIn)
+        .attr('cx',cx).attr('cy',cy)
+        .style('opacity',0);
+    }, i * 100);
+  });
+
+  // After training, fire prediction arrow FROM model TO test site
+  setTimeout(()=>{
+    const tp = sitePos(testSite, W, H);
+    // Arrow from model to test site
+    const predArrow = svg.append('line').attr('class','test-arrow')
+      .attr('x1',cx).attr('y1',cy).attr('x2',cx).attr('y2',cy)
+      .style('stroke','#f59e0b').style('stroke-width',2.5)
+      .style('stroke-dasharray','none').style('opacity',0);
+
+    predArrow.transition().duration(200).style('opacity',1)
+      .transition().duration(500).ease(d3.easeCubicOut)
+      .attr('x2',tp.x).attr('y2',tp.y);
+
+    // Flash on test site
+    setTimeout(()=>{
+      svg.select(`#site_${testSite.id}`).select('.site-circle')
+        .transition().duration(200).style('fill','rgba(245,158,11,.3)').style('stroke','#f59e0b')
+        .transition().duration(300).style('fill','rgba(34,197,94,.2)').style('stroke','#22c55e');
+      svg.select(`#site_${testSite.id}`).select('.site-icon').text('✅');
+    }, 550);
+
+    // Update round counter
+    svg.select('#roundCounter').style('opacity',1)
+      .text(`Round ${roundIdx+1} / ${ROUNDS}`);
+
+  }, trainSites.length * 100 + 700);
+
+  // Next round
+  setTimeout(()=>{ runRound(roundIdx+1); }, trainSites.length*100 + 1600);
+}
+
+function showFinal(){
+  const {W, H} = getSvgDims();
+  const svg = d3.select('#vizSvg');
+  const cx = W*.5, cy = H*.44;
+
+  document.getElementById('phaseLabel').textContent = '✓ All sites validated — Signature is universal';
+  document.querySelectorAll('.sc-dot').forEach(d => d.className = 'sc-dot done');
+
+  // All sites go green
+  SITES.forEach((s,i)=>{
+    setTimeout(()=>{
+      svg.select(`#site_${s.id}`).select('.site-circle')
+        .transition().duration(300)
+        .style('fill','rgba(34,197,94,.15)')
+        .style('stroke','#22c55e');
+      svg.select(`#site_${s.id}`).select('.site-icon').text('✅');
+    }, i*80);
+  });
+
+  // Final badge in center
+  setTimeout(()=>{
+    const badge = svg.append('g').attr('transform',`translate(${cx},${cy+60})`);
+    badge.append('rect').attr('x',-110).attr('y',-18).attr('width',220).attr('height',36)
+      .attr('rx',6).style('fill','rgba(34,197,94,.12)').style('stroke','rgba(34,197,94,.4)')
+      .style('stroke-width',1.5).style('opacity',0)
+      .transition().duration(500).style('opacity',1);
+    badge.append('text').attr('text-anchor','middle').attr('y',6)
+      .style('fill','#86efac').style('font-size','13px').style('font-weight','700')
+      .style('font-family','JetBrains Mono, monospace').style('opacity',0)
+      .text('DISENGAGEMENT SIGNATURE UNIVERSAL')
+      .transition().delay(200).duration(400).style('opacity',1);
+  }, 700);
+
+  // Show stat blocks
+  ['sb1','sb2','sb3','sb4'].forEach((id,i)=>{
+    setTimeout(()=>{
+      document.getElementById(id).classList.add('visible');
+    }, 400 + i*200);
+  });
+}
+
+let mainTimer = null;
+function startAnim(){
+  if(mainTimer) clearTimeout(mainTimer);
+  currentRound = -1;
+  ['sb1','sb2','sb3','sb4'].forEach(id => document.getElementById(id).classList.remove('visible'));
+
+  // Build step dots
+  const sc = document.getElementById('stepCounter');
+  sc.innerHTML = '';
+  SITES.forEach((_,i)=>{
+    const d = document.createElement('div');
+    d.className = 'sc-dot';
+    d.id = `scDot${i}`;
+    sc.appendChild(d);
+  });
+
+  initViz();
+  setTimeout(phaseAppear, 300);
+}
+
+window.addEventListener('load', ()=>{ setTimeout(startAnim, 400); });
+</script>
+</body>
+</html>
