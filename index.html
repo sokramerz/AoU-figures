@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buprenorphine Retention · Risk Intelligence Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #f0f2f5;
+  --bg2:       #e4e8ed;
+  --card:      #ffffff;
+  --ink:       #0f1923;
+  --ink2:      #2c3e50;
+  --muted:     #6b7a8d;
+  --rule:      #d0d7e0;
+  --low:       #0f6b3d;
+  --low-l:     #c6f0d8;
+  --med:       #a05c00;
+  --med-l:     #fde8c0;
+  --high:      #b91c1c;
+  --high-l:    #fee2e2;
+  --accent:    #1a56a0;
+  --accent2:   #0ea5e9;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-x: hidden;
+}
+
+/* ── HEADER ── */
+.header {
+  background: #0f1923;
+  color: #f0f2f5;
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  border-bottom: 3px solid var(--accent);
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+
+.header-title {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.2px;
+  flex: 1;
+}
+
+.header-title span { color: #60b4ff; }
+
+.header-meta {
+  font-size: 11px;
+  color: #8da0b8;
+  letter-spacing: 0.05em;
+  text-align: right;
+  line-height: 1.6;
+}
+
+/* ── TIMEPOINT TOGGLE ── */
+.tp-toggle {
+  display: flex;
+  background: #1e2d3d;
+  border-radius: 6px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.tp-btn {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #8da0b8;
+  background: transparent;
+  transition: all 0.25s;
+  letter-spacing: 0.02em;
+}
+
+.tp-btn.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.tp-btn:hover:not(.active) { color: #e0eaf5; }
+
+.play-btn {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 18px;
+  border: 1.5px solid #3b82f6;
+  border-radius: 4px;
+  background: transparent;
+  color: #93c5fd;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: all 0.2s;
+}
+
+.play-btn:hover, .play-btn.playing {
+  background: #3b82f6;
+  color: #fff;
+  border-color: #3b82f6;
+}
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  background: #ffffff;
+  border-bottom: 1px solid var(--rule);
+  padding: 10px 28px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.filter-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.filter-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 4px;
+  border: 1.5px solid;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+  letter-spacing: 0.01em;
+}
+
+.chip.off {
+  opacity: 0.3;
+  filter: grayscale(0.8);
+}
+
+.chip-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+
+.selection-info {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── MAIN GRID ── */
+.main {
+  padding: 20px 28px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 340px;
+  grid-template-rows: auto auto auto;
+  gap: 16px;
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  transition: box-shadow 0.2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+
+.card-header {
+  padding: 11px 16px 9px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: #f8fafc;
+}
+
+.card-title {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink2);
+}
+
+.card-subtitle {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.card-body { padding: 12px 16px; }
+
+/* ── STAT ROW ── */
+.stat-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+}
+
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--accent-color, var(--accent));
+}
+
+.stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.stat-value {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 5px;
+  transition: color 0.4s;
+  letter-spacing: -0.5px;
+}
+
+.stat-delta {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.delta-up { color: var(--low); font-weight: 500; }
+.delta-down { color: var(--high); font-weight: 500; }
+.delta-neutral { color: var(--muted); }
+
+/* ── SCATTER CHART ── */
+#scatter-card { grid-column: 1 / 2; grid-row: 2; }
+#timeline-card { grid-column: 2 / 3; grid-row: 2; }
+#sidebar-card  { grid-column: 3 / 4; grid-row: 2 / 4; }
+#bar-card      { grid-column: 1 / 2; grid-row: 3; }
+#radar-card    { grid-column: 2 / 3; grid-row: 3; }
+
+.axis path, .axis line { stroke: var(--rule); }
+.axis text {
+  fill: var(--muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+}
+
+.grid line {
+  stroke: var(--rule);
+  stroke-dasharray: 2,3;
+}
+
+/* ── TOOLTIP ── */
+#tooltip {
+  position: fixed;
+  background: #0f1923;
+  color: #e8eef5;
+  border-radius: 6px;
+  padding: 11px 15px;
+  font-size: 12px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  max-width: 210px;
+  z-index: 1000;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+  border: 1px solid #1e2d3d;
+}
+
+#tooltip .tt-name {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: #fff;
+  border-bottom: 1px solid #1e2d3d;
+  padding-bottom: 6px;
+}
+
+.tt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 3px 0;
+  color: #8da0b8;
+  font-size: 11px;
+}
+
+.tt-val { color: #e8eef5; font-weight: 600; }
+
+/* ── RISK BARS ── */
+.risk-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+
+.risk-bar-label {
+  font-size: 11px;
+  color: var(--ink2);
+  width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.risk-bar-track {
+  flex: 1;
+  height: 13px;
+  background: var(--bg2);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.risk-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+
+.risk-bar-val {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink2);
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── SELECTED DETAIL ── */
+.detail-box {
+  background: #0f1923;
+  color: #e8eef5;
+  border-radius: 6px;
+  padding: 14px;
+  margin-top: 8px;
+  min-height: 80px;
+  transition: all 0.3s;
+  border: 1px solid #1e2d3d;
+}
+
+.detail-box .detail-name {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: #fff;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.detail-item { font-size: 11px; color: #8da0b8; line-height: 1.5; }
+.detail-item span { color: #60b4ff; font-weight: 600; display: block; font-size: 13px; }
+
+/* ── MONTHLY TIMELINE PLACEHOLDER ── */
+.placeholder-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 180px;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.placeholder-msg .icon {
+  font-size: 28px;
+  opacity: 0.4;
+}
+
+.placeholder-msg p {
+  font-size: 11px;
+  text-align: center;
+  max-width: 200px;
+  line-height: 1.6;
+  opacity: 0.6;
+}
+
+.placeholder-msg .data-fields {
+  background: var(--bg2);
+  border: 1px dashed var(--rule);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 11px;
+  color: var(--ink2);
+  margin-top: 4px;
+}
+
+.data-fields code {
+  display: block;
+  margin: 2px 0;
+  color: var(--accent2);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+}
+
+/* ── ANIMATED DOTS ── */
+@keyframes pulse-ring {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  50%  { transform: scale(1.25); opacity: 0.2; }
+  100% { transform: scale(1);   opacity: 0.6; }
+}
+
+.pulse circle.ring {
+  animation: pulse-ring 2.2s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+/* ── SECTION DIVIDER ── */
+.divider {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin: 4px 0 -4px;
+}
+
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+/* ── SCROLL HINT ── */
+.scroll-hint {
+  text-align: center;
+  padding: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  background: #f8fafc;
+  border-top: 1px solid var(--rule);
+}
+
+/* shimmer on update */
+@keyframes shimmer { 0%{opacity:1} 50%{opacity:0.5} 100%{opacity:1} }
+.updating { animation: shimmer 0.4s ease; }
+</style>
+</head>
+<body>
+
+<div id="tooltip"></div>
+
+<!-- ── HEADER ── -->
+<div class="header">
+  <div class="header-title">Buprenorphine <span>Retention</span> Risk Intelligence</div>
+  <div class="tp-toggle">
+    <button class="tp-btn active" id="btn-T0" onclick="setTP('T0')">T0 Baseline</button>
+    <button class="tp-btn" id="btn-T14" onclick="setTP('T14')">T14 Dynamic</button>
+  </div>
+  <button class="play-btn" id="playBtn" onclick="togglePlay()">▶ &nbsp;PLAY</button>
+  <div class="header-meta">
+    All of Us · N=1,933<br>90-day retention model
+  </div>
+</div>
+
+<!-- ── FILTER BAR ── -->
+<div class="filter-bar">
+  <span class="filter-label">Race/Ethnicity</span>
+  <div class="filter-chips" id="raceChips"></div>
+  <span class="filter-label" style="margin-left:12px">Sex</span>
+  <div class="filter-chips" id="sexChips"></div>
+  <div class="selection-info" id="selInfo">Click any bubble or bar to highlight · <b id="selCount">10</b> subgroups shown</div>
+</div>
+
+<!-- ── MAIN GRID ── -->
+<div class="main">
+
+  <!-- STAT ROW -->
+  <div class="stat-row" id="statRow">
+    <div class="stat-card" style="--accent-color:var(--accent2)">
+      <div class="stat-label">Global AUC</div>
+      <div class="stat-value" id="s-auc" style="color:var(--accent2)">—</div>
+      <div class="stat-delta" id="s-auc-d"></div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--low)">
+      <div class="stat-label">Avg Retention</div>
+      <div class="stat-value" id="s-ret" style="color:var(--low)">—</div>
+      <div class="stat-delta" id="s-ret-d"></div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--high)">
+      <div class="stat-label">High-Risk N</div>
+      <div class="stat-value" id="s-highn" style="color:var(--high)">520</div>
+      <div class="stat-delta"><span class="delta-down">54.4% retained</span></div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--med)">
+      <div class="stat-label">Missed Risk</div>
+      <div class="stat-value" id="s-fpr" style="color:var(--med)">—</div>
+      <div class="stat-delta" id="s-fpr-d"></div>
+    </div>
+    <div class="stat-card" style="--accent-color:#8338ec">
+      <div class="stat-label">Avg Depression</div>
+      <div class="stat-value" id="s-dep" style="color:#8338ec">41%</div>
+      <div class="stat-delta"><span class="delta-neutral">across subgroups</span></div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--accent)">
+      <div class="stat-label">Brier Score</div>
+      <div class="stat-value" id="s-brier" style="color:var(--accent)">—</div>
+      <div class="stat-delta" id="s-brier-d"></div>
+    </div>
+  </div>
+
+  <!-- SCATTER: Retention vs AUC -->
+  <div class="card" id="scatter-card">
+    <div class="card-header">
+      <span class="card-title">Retention vs Model Accuracy</span>
+      <span class="card-subtitle">bubble size = N patients</span>
+    </div>
+    <div class="card-body" style="padding:8px">
+      <svg id="scatter-svg"></svg>
+    </div>
+  </div>
+
+  <!-- TIMELINE: monthly cohort (placeholder + real T0/T14 sparklines) -->
+  <div class="card" id="timeline-card">
+    <div class="card-header">
+      <span class="card-title">Retention Trajectory</span>
+      <span class="card-subtitle">T0 → T14 shift + monthly scaffold</span>
+    </div>
+    <div class="card-body" style="padding:8px">
+      <svg id="timeline-svg"></svg>
+      <div class="placeholder-msg" id="monthly-placeholder" style="display:none">
+        <div class="icon">📅</div>
+        <p>Monthly cohort snapshots will appear here.</p>
+        <div class="data-fields">
+          Fields needed per month:<br>
+          <code>cohort_month, subgroup_id</code>
+          <code>retention_rate, n_patients</code>
+          <code>auc, missed_risk</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="card" id="sidebar-card">
+    <div class="card-header">
+      <span class="card-title">Selected Subgroup</span>
+    </div>
+    <div class="card-body">
+      <div class="detail-box" id="detailBox">
+        <div class="detail-name" id="d-name">← Click any element</div>
+        <div class="detail-grid" id="d-grid"></div>
+      </div>
+
+      <div style="margin-top:14px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Retention Rate by Subgroup</div>
+        <div id="retBars"></div>
+      </div>
+
+      <div style="margin-top:14px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Missed Risk (FPR) — lower is better</div>
+        <div id="fprBars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RACING BAR: Feature importance -->
+  <div class="card" id="bar-card">
+    <div class="card-header">
+      <span class="card-title">Feature Importance</span>
+      <span class="card-subtitle">SHAP · changes T0→T14</span>
+    </div>
+    <div class="card-body" style="padding:8px">
+      <svg id="bar-svg"></svg>
+    </div>
+  </div>
+
+  <!-- DISPARITY HEATMAP -->
+  <div class="card" id="radar-card">
+    <div class="card-header">
+      <span class="card-title">Disparity Heatmap</span>
+      <span class="card-subtitle">race × metric · darker = worse</span>
+    </div>
+    <div class="card-body" style="padding:8px">
+      <svg id="heatmap-svg"></svg>
+    </div>
+  </div>
+
+</div>
+
+<div class="scroll-hint">
+  ↓ &nbsp; SCAFFOLD READY FOR MONTHLY COHORT · INDIVIDUAL TRAJECTORIES · AGE / RURALITY / SES BINS &nbsp; ↓
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════════════════
+const SUBGROUPS = [
+  { id:'wf',    label:'White · F',      race:'White',    sex:'F', n:604, ret:{T0:72.1,T14:77.2}, auc:{T0:0.650,T14:0.764}, fpr:{T0:82,T14:74},  dep:47.8, acute:31.0 },
+  { id:'wm',    label:'White · M',      race:'White',    sex:'M', n:456, ret:{T0:73.0,T14:78.3}, auc:{T0:0.680,T14:0.799}, fpr:{T0:78,T14:69},  dep:44.1, acute:41.0 },
+  { id:'bam',   label:'Black · M',      race:'Black/AA', sex:'M', n:246, ret:{T0:68.0,T14:72.4}, auc:{T0:0.590,T14:0.665}, fpr:{T0:99,T14:97.6},dep:28.5, acute:56.9 },
+  { id:'baf',   label:'Black · F',      race:'Black/AA', sex:'F', n:162, ret:{T0:76.0,T14:82.1}, auc:{T0:0.660,T14:0.747}, fpr:{T0:97,T14:93.3},dep:54.9, acute:48.1 },
+  { id:'nim',   label:'None Ind · M',   race:'None Ind', sex:'M', n:108, ret:{T0:65.0,T14:70.4}, auc:{T0:0.790,T14:0.849}, fpr:{T0:52,T14:45.9},dep:45.4, acute:43.5 },
+  { id:'nif',   label:'None Ind · F',   race:'None Ind', sex:'F', n:62,  ret:{T0:62.0,T14:67.7}, auc:{T0:0.790,T14:0.839}, fpr:{T0:55,T14:45.9},dep:32.3, acute:32.3 },
+  { id:'mtpm',  label:'Multiracial · M',race:'Multi',    sex:'M', n:54,  ret:{T0:72.0,T14:75.9}, auc:{T0:0.500,T14:0.697}, fpr:{T0:99,T14:95.8},dep:40.7, acute:33.3 },
+  { id:'mtpf',  label:'Multiracial · F',race:'Multi',    sex:'F', n:59,  ret:{T0:67.0,T14:71.2}, auc:{T0:0.680,T14:0.729}, fpr:{T0:98,T14:95.8},dep:42.4, acute:27.1 },
+  { id:'aianm', label:'AIAN · M',       race:'AIAN',     sex:'M', n:30,  ret:{T0:60.0,T14:66.7}, auc:{T0:0.620,T14:0.720}, fpr:{T0:100,T14:100},dep:36.7, acute:36.7 },
+  { id:'aianf', label:'AIAN · F',       race:'AIAN',     sex:'F', n:27,  ret:{T0:68.0,T14:74.1}, auc:{T0:0.630,T14:0.714}, fpr:{T0:100,T14:100},dep:48.1, acute:32.0 },
+];
+
+const RACE_COLOR = {
+  'White':    '#1d6fa4',
+  'Black/AA': '#c1440e',
+  'None Ind': '#b5621e',
+  'Multi':    '#8338ec',
+  'AIAN':     '#2d9964',
+};
+
+const FEATURES = {
+  T0: [
+    { name:'visits_14d',         val:0.185 },
+    { name:'no_health_ins',      val:0.117 },
+    { name:'deprivation_idx',    val:0.078 },
+    { name:'fraction_poverty',   val:0.072 },
+    { name:'race_Black/AA',      val:0.069 },
+    { name:'median_income',      val:0.061 },
+  ],
+  T14: [
+    { name:'visits_14d',         val:0.200 },
+    { name:'no_health_ins',      val:0.117 },
+    { name:'has_depression',     val:0.098 },
+    { name:'has_alcohol_use',    val:0.091 },
+    { name:'fraction_poverty',   val:0.072 },
+    { name:'median_income',      val:0.068 },
+  ],
+};
+
+const GLOBAL = {
+  T0:  { auc:0.875, brier:0.074, ret:70.2, fpr:83 },
+  T14: { auc:0.922, brier:0.063, ret:75.4, fpr:72 },
+};
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let tp         = 'T0';
+let hiddenRaces = new Set();
+let hiddenSexes = new Set();
+let selectedId  = null;
+let playTimer   = null;
+let isPlaying   = false;
+
+function visibleData() {
+  return SUBGROUPS.filter(d =>
+    !hiddenRaces.has(d.race) && !hiddenSexes.has(d.sex)
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+//  FILTER CHIPS
+// ═══════════════════════════════════════════════════════
+function buildChips() {
+  const raceChips = document.getElementById('raceChips');
+  Object.entries(RACE_COLOR).forEach(([race, color]) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.style.borderColor = color;
+    chip.style.color = color;
+    chip.innerHTML = `<div class="chip-dot" style="background:${color}"></div>${race}`;
+    chip.dataset.race = race;
+    chip.onclick = () => {
+      if (hiddenRaces.has(race)) hiddenRaces.delete(race);
+      else hiddenRaces.add(race);
+      chip.classList.toggle('off', hiddenRaces.has(race));
+      refreshAll();
+    };
+    raceChips.appendChild(chip);
+  });
+
+  const sexChips = document.getElementById('sexChips');
+  [['M','♂ Male'],['F','♀ Female']].forEach(([s, label]) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.style.borderColor = '#555';
+    chip.style.color = '#555';
+    chip.innerHTML = `${label}`;
+    chip.dataset.sex = s;
+    chip.onclick = () => {
+      if (hiddenSexes.has(s)) hiddenSexes.delete(s);
+      else hiddenSexes.add(s);
+      chip.classList.toggle('off', hiddenSexes.has(s));
+      refreshAll();
+    };
+    sexChips.appendChild(chip);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  STAT CARDS
+// ═══════════════════════════════════════════════════════
+function updateStats() {
+  const g = GLOBAL[tp];
+  const prev = GLOBAL[tp === 'T14' ? 'T0' : 'T14'];
+
+  const fmt = (id, val, delta, deltaEl, isGood) => {
+    document.getElementById(id).textContent = typeof val === 'number' && val < 2 ? val.toFixed(3) : (typeof val === 'number' ? val.toFixed(1) + (id==='s-ret'||id==='s-fpr'?'%':'') : val);
+    if (deltaEl) {
+      const d = (val - (typeof prev[id.replace('s-','')] === 'number' ? prev[id.replace('s-','')] : 0));
+    }
+  };
+
+  document.getElementById('s-auc').textContent   = g.auc.toFixed(3);
+  document.getElementById('s-ret').textContent   = g.ret.toFixed(1) + '%';
+  document.getElementById('s-fpr').textContent   = g.fpr + '%';
+  document.getElementById('s-brier').textContent = g.brier.toFixed(3);
+
+  const aucD  = document.getElementById('s-auc-d');
+  const retD  = document.getElementById('s-ret-d');
+  const fprD  = document.getElementById('s-fpr-d');
+  const brierD= document.getElementById('s-brier-d');
+
+  if (tp === 'T14') {
+    aucD.innerHTML   = `<span class="delta-up">↑ +5.4% vs T0</span>`;
+    retD.innerHTML   = `<span class="delta-up">↑ +5.2pp vs T0</span>`;
+    fprD.innerHTML   = `<span class="delta-up">↓ −11pp vs T0</span>`;
+    brierD.innerHTML = `<span class="delta-up">↓ −15% error</span>`;
+  } else {
+    aucD.innerHTML   = `<span class="delta-neutral">baseline model</span>`;
+    retD.innerHTML   = `<span class="delta-neutral">at treatment start</span>`;
+    fprD.innerHTML   = `<span class="delta-neutral">baseline missed risk</span>`;
+    brierD.innerHTML = `<span class="delta-neutral">baseline calibration</span>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  SCATTER CHART
+// ═══════════════════════════════════════════════════════
+const scW = 380, scH = 240;
+const scM = { top:10, right:20, bottom:40, left:45 };
+const scIW = scW - scM.left - scM.right;
+const scIH = scH - scM.top - scM.bottom;
+
+const scSvg = d3.select('#scatter-svg')
+  .attr('width', scW).attr('height', scH);
+const scG = scSvg.append('g').attr('transform', `translate(${scM.left},${scM.top})`);
+
+scG.append('g').attr('class','grid').attr('id','sc-xgrid').attr('transform',`translate(0,${scIH})`);
+scG.append('g').attr('class','grid').attr('id','sc-ygrid');
+const scXa = scG.append('g').attr('class','axis').attr('transform',`translate(0,${scIH})`);
+const scYa = scG.append('g').attr('class','axis');
+scG.append('text').attr('class','axis').attr('text-anchor','middle')
+  .attr('x',scIW/2).attr('y',scIH+32).style('fill','var(--muted)').style('font-size','10px')
+  .style('font-family','IBM Plex Sans, sans-serif').style('font-weight','600').style('letter-spacing','0.06em').text('RETENTION RATE (%)');
+scG.append('text').attr('class','axis').attr('text-anchor','middle')
+  .attr('transform',`translate(-36,${scIH/2}) rotate(-90)`)
+  .style('fill','var(--muted)').style('font-size','10px').style('font-family','IBM Plex Sans, sans-serif').style('font-weight','600').style('letter-spacing','0.06em').text('MODEL AUC');
+
+// Trail lines
+const scTrails = scG.append('g').attr('id','sc-trails');
+// Bubbles
+const scBubbles = scG.append('g').attr('id','sc-bubbles');
+
+const rScale = d3.scaleSqrt().domain([27,604]).range([7,28]);
+
+function renderScatter(transition=true) {
+  const data = visibleData();
+  const xSc = d3.scaleLinear().domain([58,86]).range([0,scIW]);
+  const ySc = d3.scaleLinear().domain([0.48,0.92]).range([scIH,0]);
+
+  d3.select('#sc-xgrid').call(d3.axisBottom(xSc).tickSize(-scIH).tickFormat(''));
+  d3.select('#sc-ygrid').call(d3.axisLeft(ySc).tickSize(-scIW).tickFormat(''));
+  scXa.call(d3.axisBottom(xSc).ticks(5).tickFormat(d=>d+'%'));
+  scYa.call(d3.axisLeft(ySc).ticks(4).tickFormat(d=>d.toFixed(2)));
+
+  // Trails
+  scTrails.selectAll('.sc-trail').remove();
+  data.forEach(d => {
+    scTrails.append('line').attr('class','sc-trail')
+      .attr('x1', xSc(d.ret.T0)).attr('y1', ySc(d.auc.T0))
+      .attr('x2', xSc(d.ret.T14)).attr('y2', ySc(d.auc.T14))
+      .style('stroke', RACE_COLOR[d.race])
+      .style('stroke-width', 1.5)
+      .style('stroke-dasharray','3,3')
+      .style('opacity', 0.35);
+    // Arrow head at T14 end
+    const angle = Math.atan2(ySc(d.auc.T14)-ySc(d.auc.T0), xSc(d.ret.T14)-xSc(d.ret.T0));
+    const ax = xSc(d.ret.T14), ay = ySc(d.auc.T14);
+    const len = 6;
+    scTrails.append('path')
+      .attr('d', `M${ax},${ay} L${ax-len*Math.cos(angle-0.4)},${ay-len*Math.sin(angle-0.4)} L${ax-len*Math.cos(angle+0.4)},${ay-len*Math.sin(angle+0.4)} Z`)
+      .style('fill', RACE_COLOR[d.race]).style('opacity',0.5);
+  });
+
+  // Bubbles
+  const sel = scBubbles.selectAll('.sc-grp').data(data, d=>d.id);
+
+  const enter = sel.enter().append('g').attr('class','sc-grp pulse')
+    .style('cursor','pointer')
+    .on('click', (e,d) => selectSubgroup(d.id))
+    .on('mouseover', showTT)
+    .on('mousemove', moveTT)
+    .on('mouseout',  hideTT)
+    .attr('transform', d => `translate(${xSc(d.ret.T0)},${ySc(d.auc.T0)})`);
+
+  // Pulse ring
+  enter.append('circle').attr('class','ring')
+    .attr('r', d => rScale(d.n) + 4)
+    .style('fill','none')
+    .style('stroke', d => RACE_COLOR[d.race])
+    .style('stroke-width', 1.5)
+    .style('opacity', 0.3);
+
+  enter.append('circle').attr('class','dot')
+    .attr('r', d => rScale(d.n))
+    .style('fill', d => RACE_COLOR[d.race])
+    .style('fill-opacity', 0.82)
+    .style('stroke', d => RACE_COLOR[d.race])
+    .style('stroke-width', 2);
+
+  // Female inner marker
+  enter.filter(d => d.sex === 'F').append('circle')
+    .attr('r', 3).style('fill','white').style('opacity',0.5).style('pointer-events','none');
+
+  enter.append('text')
+    .attr('dy', d => -rScale(d.n)-4)
+    .attr('text-anchor','middle')
+    .style('font-size','10px')
+    .style('font-family','IBM Plex Sans, sans-serif')
+    .style('font-weight','500')
+    .style('fill','var(--ink2)')
+    .style('pointer-events','none')
+    .text(d => d.label.split(' ·')[0].substring(0,5));
+
+  sel.exit().transition().duration(300).style('opacity',0).remove();
+
+  const all = scBubbles.selectAll('.sc-grp');
+  const t = transition ? d3.transition().duration(700).ease(d3.easeCubicInOut) : d3.transition().duration(0);
+  all.transition(t).attr('transform', d => `translate(${xSc(d.ret[tp])},${ySc(d.auc[tp])})`);
+
+  // Highlight selected
+  all.select('.dot')
+    .style('stroke-width', d => d.id === selectedId ? 3.5 : 2)
+    .style('stroke', d => d.id === selectedId ? 'var(--ink)' : RACE_COLOR[d.race]);
+}
+
+// ═══════════════════════════════════════════════════════
+//  TIMELINE (T0→T14 sparklines + monthly scaffold)
+// ═══════════════════════════════════════════════════════
+const tlW = 380, tlH = 240;
+const tlM = { top:10, right:20, bottom:40, left:45 };
+const tlIW = tlW - tlM.left - tlM.right;
+const tlIH = tlH - tlM.top - tlM.bottom;
+
+const tlSvg = d3.select('#timeline-svg')
+  .attr('width', tlW).attr('height', tlH);
+const tlG = tlSvg.append('g').attr('transform', `translate(${tlM.left},${tlM.top})`);
+
+// X: T0=0, T14=1 (scaffold slots for monthly data at 2,3,4...)
+const tlX = d3.scaleLinear().domain([0, 5]).range([0, tlIW]);
+const tlY = d3.scaleLinear().domain([55, 90]).range([tlIH, 0]);
+
+tlG.append('g').attr('class','grid')
+  .attr('transform',`translate(0,${tlIH})`)
+  .call(d3.axisBottom(tlX).tickSize(-tlIH).tickFormat(''));
+tlG.append('g').attr('class','grid')
+  .call(d3.axisLeft(tlY).tickSize(-tlIW).tickFormat(''));
+
+const tlXa = tlG.append('g').attr('class','axis').attr('transform',`translate(0,${tlIH})`);
+const tlYa = tlG.append('g').attr('class','axis');
+
+tlXa.call(d3.axisBottom(tlX).ticks(6).tickFormat(i => {
+  const labels = ['T0','T14','Mo.1','Mo.2','Mo.3','Mo.4'];
+  return labels[Math.round(i)] || '';
+}));
+tlYa.call(d3.axisLeft(tlY).ticks(4).tickFormat(d => d+'%'));
+
+tlG.append('text').attr('text-anchor','middle')
+  .attr('x',tlIW/2).attr('y',tlIH+32)
+  .style('fill','var(--muted)').style('font-size','10px').style('font-family','IBM Plex Sans, sans-serif').style('font-weight','600').style('letter-spacing','0.06em')
+  .text('TIMEPOINT / COHORT MONTH');
+tlG.append('text').attr('text-anchor','middle')
+  .attr('transform',`translate(-36,${tlIH/2}) rotate(-90)`)
+  .style('fill','var(--muted)').style('font-size','10px').style('font-family','IBM Plex Sans, sans-serif').style('font-weight','600').style('letter-spacing','0.06em')
+  .text('RETENTION RATE (%)');
+
+// Scaffold zone
+tlG.append('rect')
+  .attr('x', tlX(1.6)).attr('y', 0)
+  .attr('width', tlX(5)-tlX(1.6)).attr('height', tlIH)
+  .style('fill','var(--bg2)').style('opacity',0.5);
+
+tlG.append('text').attr('x', (tlX(1.6)+tlIW)/2).attr('y', tlIH/2)
+  .attr('text-anchor','middle').style('fill','var(--muted)').style('font-size','11px')
+  .style('font-family','IBM Plex Sans, sans-serif').style('font-weight','500')
+  .style('letter-spacing','0.04em').text('← ADD MONTHLY DATA →');
+
+const tlLines = tlG.append('g').attr('id','tl-lines');
+const tlDots  = tlG.append('g').attr('id','tl-dots');
+
+const lineGen = d3.line()
+  .x((d,i) => tlX(i === 0 ? 0 : 1))
+  .y(d => tlY(d))
+  .curve(d3.curveMonotoneX);
+
+function renderTimeline(transition=true) {
+  const data = visibleData();
+  const t = transition ? d3.transition().duration(700).ease(d3.easeCubicInOut) : d3.transition().duration(0);
+
+  // Lines
+  const lsel = tlLines.selectAll('.tl-line').data(data, d=>d.id);
+  lsel.enter().append('path').attr('class','tl-line')
+    .style('fill','none').style('stroke', d => RACE_COLOR[d.race])
+    .style('stroke-width', 2).style('opacity', 0.7)
+    .merge(lsel)
+    .transition(t)
+    .attr('d', d => lineGen([d.ret.T0, d.ret.T14]));
+  lsel.exit().remove();
+
+  // Dots at T0 and T14
+  [0,1].forEach(xi => {
+    const tpKey = xi === 0 ? 'T0' : 'T14';
+    const dsel = tlDots.selectAll(`.tl-dot-${tpKey}`).data(data, d=>d.id);
+    dsel.enter().append('circle').attr('class',`tl-dot-${tpKey}`)
+      .attr('r', xi===0 ? 4 : 6)
+      .style('fill', d => RACE_COLOR[d.race])
+      .style('stroke','white').style('stroke-width', xi===0?1:2)
+      .style('cursor','pointer')
+      .on('click', (e,d) => selectSubgroup(d.id))
+      .on('mouseover', showTT).on('mousemove', moveTT).on('mouseout', hideTT)
+      .merge(dsel)
+      .transition(t)
+      .attr('cx', tlX(xi))
+      .attr('cy', d => tlY(d.ret[tpKey]))
+      .style('opacity', d => (d.id === selectedId || !selectedId) ? 1 : 0.35);
+    dsel.exit().remove();
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  RACING FEATURE IMPORTANCE BAR
+// ═══════════════════════════════════════════════════════
+const brW = 380, brH = 220;
+const brM = { top:10, right:60, bottom:30, left:110 };
+const brIW = brW - brM.left - brM.right;
+const brIH = brH - brM.top - brM.bottom;
+
+const brSvg = d3.select('#bar-svg').attr('width',brW).attr('height',brH);
+const brG   = brSvg.append('g').attr('transform',`translate(${brM.left},${brM.top})`);
+const brXa  = brG.append('g').attr('class','axis').attr('transform',`translate(0,${brIH})`);
+const brBars= brG.append('g');
+
+const brX = d3.scaleLinear().domain([0, 0.22]).range([0,brIW]);
+brXa.call(d3.axisBottom(brX).ticks(4).tickFormat(d3.format('.2f')));
+
+function renderBars(transition=true) {
+  const feats = FEATURES[tp];
+  const brY = d3.scaleBand().domain(feats.map(f=>f.name)).range([0,brIH]).padding(0.28);
+
+  const t = transition ? d3.transition().duration(700).ease(d3.easeCubicInOut) : d3.transition().duration(0);
+
+  const sel = brBars.selectAll('.br-g').data(feats, d=>d.name);
+
+  const enter = sel.enter().append('g').attr('class','br-g')
+    .attr('transform', d => `translate(0,${brY(d.name)})`);
+
+  enter.append('text').attr('class','br-label')
+    .attr('x',-6).attr('y', brY.bandwidth()/2)
+    .attr('dy','0.35em').attr('text-anchor','end')
+    .style('font-size','10px')
+    .style('font-family','IBM Plex Sans, sans-serif')
+    .style('fill','var(--ink2)')
+    .text(d=>d.name);
+
+  enter.append('rect').attr('class','br-rect')
+    .attr('height', brY.bandwidth())
+    .attr('rx', 3)
+    .style('fill', d => d.name.includes('visits') ? 'var(--accent2)' :
+                         d.name.includes('ins') ? 'var(--high)' :
+                         d.name.includes('dep') ? '#8338ec' :
+                         d.name.includes('alc') ? '#b5621e' : 'var(--ink2)')
+    .attr('width', 0);
+
+  enter.append('text').attr('class','br-val')
+    .attr('dy','0.35em').style('font-size','9px').style('fill','var(--ink2)');
+
+  sel.exit().transition(t).style('opacity',0).remove();
+
+  const all = brBars.selectAll('.br-g');
+  all.transition(t).attr('transform', d => `translate(0,${brY(d.name)})`);
+
+  all.select('.br-label').text(d=>d.name);
+  all.select('.br-rect').transition(t).attr('width', d => brX(d.val));
+  all.select('.br-val').transition(t)
+    .attr('x', d => brX(d.val)+5)
+    .attr('y', brY.bandwidth()/2)
+    .style('font-family','IBM Plex Mono, monospace')
+    .style('font-size','10px')
+    .text(d => d.val.toFixed(3));
+}
+
+// ═══════════════════════════════════════════════════════
+//  DISPARITY HEATMAP
+// ═══════════════════════════════════════════════════════
+const hmW = 380, hmH = 220;
+const hmM = { top:30, right:16, bottom:30, left:80 };
+const hmIW = hmW - hmM.left - hmM.right;
+const hmIH = hmH - hmM.top - hmM.bottom;
+
+const hmSvg = d3.select('#heatmap-svg').attr('width',hmW).attr('height',hmH);
+const hmG   = hmSvg.append('g').attr('transform',`translate(${hmM.left},${hmM.top})`);
+
+const METRICS = ['Retention','AUC','Missed Risk','Acute %','Depression %'];
+const RACES   = ['White','Black/AA','None Ind','Multi','AIAN'];
+
+function getMetricVal(d, metric) {
+  if (metric === 'Retention')    return d.ret[tp];
+  if (metric === 'AUC')          return d.auc[tp] * 100;
+  if (metric === 'Missed Risk')  return d.fpr[tp];
+  if (metric === 'Acute %')      return d.acute;
+  if (metric === 'Depression %') return d.dep;
+}
+
+// For each race, average across sexes
+function getRaceAvg(race, metric) {
+  const grp = SUBGROUPS.filter(d => d.race === race);
+  return d3.mean(grp, d => getMetricVal(d, metric));
+}
+
+// Color scale per metric (normalized)
+const metricDomain = {
+  'Retention':    [58, 84, false],  // higher=good, so invert
+  'AUC':          [50, 90, false],
+  'Missed Risk':  [40,105, true],   // higher=bad
+  'Acute %':      [25, 60, true],
+  'Depression %': [25, 58, true],
+};
+
+function hmColor(metric, val) {
+  const [lo, hi, badHigh] = metricDomain[metric];
+  const t = (val - lo) / (hi - lo);
+  const norm = badHigh ? t : 1 - t;
+  return d3.interpolateRdYlGn(1 - norm);
+}
+
+const cellW = hmIW / METRICS.length;
+const cellH = hmIH / RACES.length;
+
+// Column headers
+hmG.selectAll('.hm-col-lbl').data(METRICS).enter().append('text')
+  .attr('class','hm-col-lbl')
+  .attr('x', (d,i) => i*cellW + cellW/2).attr('y',-8)
+  .attr('text-anchor','middle')
+  .style('font-size','10px').style('fill','var(--muted)')
+  .style('font-family','IBM Plex Sans, sans-serif').style('font-weight','600')
+  .style('letter-spacing','0.04em')
+  .text(d=>d);
+
+function renderHeatmap() {
+  const data = RACES.flatMap((race,ri) =>
+    METRICS.map((metric,mi) => ({ race, metric, ri, mi, val: getRaceAvg(race, metric) }))
+  );
+
+  // Row labels
+  const rowSel = hmG.selectAll('.hm-row-lbl').data(RACES);
+  rowSel.enter().append('text').attr('class','hm-row-lbl')
+    .merge(rowSel)
+    .attr('x',-8).attr('y',(d,i) => i*cellH + cellH/2).attr('dy','0.35em')
+    .attr('text-anchor','end')
+    .style('font-size','10px')
+    .style('font-family','IBM Plex Sans, sans-serif')
+    .style('font-weight','600')
+    .style('fill', d => RACE_COLOR[d])
+    .text(d=>d);
+
+  const t = d3.transition().duration(600).ease(d3.easeCubicInOut);
+  const sel = hmG.selectAll('.hm-cell').data(data, d=>`${d.race}-${d.metric}`);
+
+  const enter = sel.enter().append('g').attr('class','hm-cell')
+    .style('cursor','pointer')
+    .on('mouseover', function(e,d) {
+      showTTRaw(e, `${d.race} — ${d.metric}`, [`Value: <b>${d.val.toFixed(1)}${d.metric==='AUC'?'':d.metric.includes('%')||d.metric==='Retention'||d.metric==='Missed Risk'?'%':''}</b>`]);
+    })
+    .on('mousemove', moveTT).on('mouseout', hideTT);
+
+  enter.append('rect')
+    .attr('x', d => d.mi*cellW+1).attr('y', d => d.ri*cellH+1)
+    .attr('width', cellW-2).attr('height', cellH-2).attr('rx',3)
+    .style('fill', d => hmColor(d.metric, d.val)).style('opacity',0);
+
+  enter.append('text')
+    .attr('x', d => d.mi*cellW + cellW/2).attr('y', d => d.ri*cellH + cellH/2)
+    .attr('dy','0.35em').attr('text-anchor','middle')
+    .style('font-size','10px')
+    .style('font-family','IBM Plex Mono, monospace')
+    .style('fill','rgba(0,0,0,0.72)').style('pointer-events','none');
+
+  const all = hmG.selectAll('.hm-cell');
+  all.select('rect').transition(t).style('fill', d => hmColor(d.metric, d.val)).style('opacity',1);
+  all.select('text').text(d => d.val.toFixed(0) + (d.metric==='AUC'?'':''));
+}
+
+// ═══════════════════════════════════════════════════════
+//  SIDEBAR BARS
+// ═══════════════════════════════════════════════════════
+function renderSideBars() {
+  const data = [...visibleData()].sort((a,b) => b.ret[tp] - a.ret[tp]);
+
+  // Retention bars
+  const retEl = document.getElementById('retBars');
+  retEl.innerHTML = '';
+  data.forEach(d => {
+    retEl.innerHTML += `
+      <div class="risk-bar-row" style="cursor:pointer" onclick="selectSubgroup('${d.id}')">
+        <div class="risk-bar-label" style="color:${d.id===selectedId?'var(--accent)':'var(--ink2)'}">${d.label}</div>
+        <div class="risk-bar-track">
+          <div class="risk-bar-fill" style="width:${d.ret[tp]}%;background:${RACE_COLOR[d.race]};opacity:${d.id===selectedId?1:0.7}"></div>
+        </div>
+        <div class="risk-bar-val">${d.ret[tp].toFixed(1)}%</div>
+      </div>`;
+  });
+
+  // FPR bars (inverted = lower is better)
+  const fprEl = document.getElementById('fprBars');
+  fprEl.innerHTML = '';
+  const sorted = [...data].sort((a,b) => a.fpr[tp] - b.fpr[tp]);
+  sorted.forEach(d => {
+    const pct = Math.min(d.fpr[tp], 100);
+    const col = pct > 90 ? 'var(--high)' : pct > 70 ? 'var(--med)' : 'var(--low)';
+    fprEl.innerHTML += `
+      <div class="risk-bar-row" style="cursor:pointer" onclick="selectSubgroup('${d.id}')">
+        <div class="risk-bar-label" style="color:${d.id===selectedId?'var(--accent)':'var(--ink2)'}">${d.label}</div>
+        <div class="risk-bar-track">
+          <div class="risk-bar-fill" style="width:${pct}%;background:${col}"></div>
+        </div>
+        <div class="risk-bar-val">${d.fpr[tp].toFixed(0)}%</div>
+      </div>`;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  SELECTION
+// ═══════════════════════════════════════════════════════
+function selectSubgroup(id) {
+  selectedId = selectedId === id ? null : id;
+  const d = SUBGROUPS.find(x => x.id === id);
+
+  const box = document.getElementById('detailBox');
+  const name = document.getElementById('d-name');
+  const grid = document.getElementById('d-grid');
+
+  if (!d || !selectedId) {
+    name.textContent = '← Click any element';
+    grid.innerHTML = '';
+    box.style.borderLeft = '';
+  } else {
+    box.style.borderLeft = `4px solid ${RACE_COLOR[d.race]}`;
+    name.textContent = d.label;
+    const delta_ret = (d.ret.T14 - d.ret.T0).toFixed(1);
+    const delta_auc = ((d.auc.T14 - d.auc.T0)*100).toFixed(1);
+    grid.innerHTML = `
+      <div class="detail-item">N patients<br><span>${d.n}</span></div>
+      <div class="detail-item">Retention (${tp})<br><span>${d.ret[tp]}%</span></div>
+      <div class="detail-item">AUC (${tp})<br><span>${d.auc[tp].toFixed(3)}</span></div>
+      <div class="detail-item">Missed Risk<br><span>${d.fpr[tp]}%</span></div>
+      <div class="detail-item">T0→T14 Ret Δ<br><span style="color:var(--low)">+${delta_ret}%</span></div>
+      <div class="detail-item">T0→T14 AUC Δ<br><span style="color:var(--accent2)">+${delta_auc}%</span></div>
+      <div class="detail-item">Depression<br><span>${d.dep}%</span></div>
+      <div class="detail-item">Acute Events<br><span>${d.acute}%</span></div>
+    `;
+  }
+
+  renderScatter(true);
+  renderTimeline(true);
+  renderSideBars();
+}
+
+// ═══════════════════════════════════════════════════════
+//  TOOLTIP
+// ═══════════════════════════════════════════════════════
+const ttEl = document.getElementById('tooltip');
+
+function showTT(event, d) {
+  const dret = (d.ret.T14 - d.ret.T0).toFixed(1);
+  ttEl.innerHTML = `
+    <div class="tt-name">${d.label}</div>
+    <div class="tt-row"><span>N</span><span class="tt-val">${d.n}</span></div>
+    <div class="tt-row"><span>Retention (${tp})</span><span class="tt-val">${d.ret[tp]}%</span></div>
+    <div class="tt-row"><span>AUC (${tp})</span><span class="tt-val">${d.auc[tp].toFixed(3)}</span></div>
+    <div class="tt-row"><span>Missed Risk</span><span class="tt-val">${d.fpr[tp]}%</span></div>
+    <div class="tt-row"><span>T0→T14 Δ</span><span class="tt-val" style="color:#56d364">+${dret}%</span></div>
+    <div class="tt-row"><span>Depression</span><span class="tt-val">${d.dep}%</span></div>
+    <div class="tt-row"><span>Acute Events</span><span class="tt-val">${d.acute}%</span></div>
+  `;
+  ttEl.style.opacity = 1;
+}
+
+function showTTRaw(e, name, rows) {
+  ttEl.innerHTML = `<div class="tt-name">${name}</div>${rows.map(r=>`<div class="tt-row">${r}</div>`).join('')}`;
+  ttEl.style.opacity = 1;
+}
+
+function moveTT(event) {
+  let x = event.clientX + 14, y = event.clientY - 10;
+  if (x + 220 > window.innerWidth) x -= 230;
+  ttEl.style.left = x + 'px';
+  ttEl.style.top  = y + 'px';
+}
+
+function hideTT() { ttEl.style.opacity = 0; }
+
+// ═══════════════════════════════════════════════════════
+//  TIMEPOINT + PLAY
+// ═══════════════════════════════════════════════════════
+function setTP(newTp) {
+  tp = newTp;
+  document.getElementById('btn-T0').classList.toggle('active', tp==='T0');
+  document.getElementById('btn-T14').classList.toggle('active', tp==='T14');
+  updateStats();
+  refreshAll();
+  document.getElementById('selCount').textContent = visibleData().length;
+}
+
+function togglePlay() {
+  if (isPlaying) {
+    clearInterval(playTimer);
+    isPlaying = false;
+    document.getElementById('playBtn').textContent = '▶ \u00A0PLAY';
+    document.getElementById('playBtn').classList.remove('playing');
+  } else {
+    isPlaying = true;
+    document.getElementById('playBtn').textContent = '⏸ \u00A0PAUSE';
+    document.getElementById('playBtn').classList.add('playing');
+    setTP('T0');
+    playTimer = setInterval(() => {
+      const next = tp === 'T0' ? 'T14' : 'T0';
+      setTP(next);
+      if (next === 'T0') {
+        // Pause at T0 briefly then auto-advance
+      }
+    }, 2000);
+    // Auto-stop after 2 cycles
+    setTimeout(() => { if(isPlaying) togglePlay(); }, 8200);
+  }
+}
+
+function refreshAll(transition=true) {
+  renderScatter(transition);
+  renderTimeline(transition);
+  renderBars(transition);
+  renderHeatmap();
+  renderSideBars();
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+buildChips();
+updateStats();
+refreshAll(false);
+document.getElementById('selCount').textContent = visibleData().length;
+
+function buildChips() {
+  const raceChips = document.getElementById('raceChips');
+  Object.entries(RACE_COLOR).forEach(([race, color]) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.style.borderColor = color;
+    chip.style.color = color;
+    chip.innerHTML = `<div class="chip-dot" style="background:${color}"></div>${race}`;
+    chip.onclick = () => {
+      if (hiddenRaces.has(race)) hiddenRaces.delete(race);
+      else hiddenRaces.add(race);
+      chip.classList.toggle('off', hiddenRaces.has(race));
+      document.getElementById('selCount').textContent = visibleData().length;
+      refreshAll(true);
+    };
+    raceChips.appendChild(chip);
+  });
+
+  const sexChips = document.getElementById('sexChips');
+  [['M','♂ Male'],['F','♀ Female']].forEach(([s, label]) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.style.borderColor = '#888';
+    chip.style.color = '#555';
+    chip.textContent = label;
+    chip.onclick = () => {
+      if (hiddenSexes.has(s)) hiddenSexes.delete(s);
+      else hiddenSexes.add(s);
+      chip.classList.toggle('off', hiddenSexes.has(s));
+      document.getElementById('selCount').textContent = visibleData().length;
+      refreshAll(true);
+    };
+    sexChips.appendChild(chip);
+  });
+}
+</script>
+</body>
+</html>
