@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Slide 4 — SHAP Force: Environmental Compounding</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:#fff;font-family:'Inter',sans-serif;width:1280px;height:720px;overflow:hidden;position:relative}
+
+.bg{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 60%,rgba(99,102,241,.05) 0%,transparent 70%);pointer-events:none}
+
+/* header */
+.hdr{position:absolute;top:32px;left:60px;right:60px;z-index:10}
+.act-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:rgba(255,255,255,.35);text-transform:uppercase;margin-bottom:6px}
+h1{font-size:26px;font-weight:700;letter-spacing:-.5px}
+h1 em{font-style:italic;font-weight:300;color:rgba(255,255,255,.45)}
+.sub{font-size:13px;color:rgba(255,255,255,.4);margin-top:4px;font-weight:300}
+
+/* main chart area */
+#viz{position:absolute;top:100px;left:60px;right:60px;bottom:60px}
+
+/* patient box */
+.patient-box{position:absolute;right:0;top:48px;background:#0a0a14;border:1.5px solid rgba(255,255,255,.18);border-radius:10px;padding:14px 24px;text-align:center;z-index:10;min-width:160px;box-shadow:0 4px 24px rgba(0,0,0,.6)}
+.patient-box .label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:6px;font-family:'JetBrains Mono',monospace}
+.patient-box .score{font-size:36px;font-weight:700;font-family:'JetBrains Mono',monospace;transition:color .6s ease}
+.patient-box .score-label{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px}
+
+/* outcome arrow */
+.outcome-bar{position:absolute;bottom:12px;left:60px;right:60px;height:28px;z-index:10}
+
+/* legend */
+.legend{position:absolute;top:100px;right:0;display:flex;gap:18px;font-size:11px;color:rgba(255,255,255,.45)}
+.leg{display:flex;align-items:center;gap:6px}
+.leg-box{width:12px;height:12px;border-radius:2px}
+
+/* step indicator */
+.steps{position:absolute;bottom:20px;left:60px;display:flex;gap:8px;z-index:20}
+.step-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.15);transition:all .3s;cursor:pointer}
+.step-dot.active{background:#6366f1;transform:scale(1.3)}
+.step-dot.done{background:rgba(99,102,241,.5)}
+
+/* replay */
+.replay-btn{position:absolute;bottom:14px;right:60px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;padding:7px 16px;border:1px solid rgba(255,255,255,.2);border-radius:4px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);cursor:pointer;transition:all .2s;z-index:20}
+.replay-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+
+/* annotation */
+.annotation{position:absolute;pointer-events:none;opacity:0;transition:opacity .5s ease;z-index:15}
+.ann-box{background:rgba(0,0,0,.85);border:1px solid;border-radius:6px;padding:8px 12px;font-size:11px;line-height:1.5;max-width:170px;backdrop-filter:blur(6px)}
+.ann-box strong{display:block;font-size:12px;font-weight:600;margin-bottom:3px}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+
+<div class="hdr">
+  <div class="act-label">Act II · Disengagement Signature 2</div>
+  <h1>Environmental Risk <em>Compounding</em></h1>
+  <div class="sub">SHAP forces activating in real time — watch structural barriers stack toward dropout</div>
+</div>
+
+<div class="legend">
+  <div class="leg"><div class="leg-box" style="background:#ef4444"></div>Pushes toward dropout</div>
+  <div class="leg"><div class="leg-box" style="background:#22c55e"></div>Protective</div>
+</div>
+
+<div id="viz">
+  <svg id="shapSvg" width="100%" height="100%"></svg>
+  <div class="patient-box" id="patientBox">
+    <div class="label">Risk Score</div>
+    <div class="score" id="riskScore">0.18</div>
+    <div class="score-label">Dropout Probability</div>
+  </div>
+</div>
+
+<div class="steps" id="stepDots"></div>
+<button class="replay-btn" onclick="startAnimation()">↺ REPLAY</button>
+
+<script>
+const W = 1160, H = 530;
+const svg = d3.select('#shapSvg');
+const cx = W / 2, cy = H / 2;
+
+// SHAP factors — each arrives in sequence
+// positive val = pushes toward dropout (red), negative = protective (green)
+const factors = [
+  { id:'visits',    label:'Early Visits ×2',       shap:-.38, color:'#22c55e', side:'left',  icon:'🏥', desc:'2 early visits\nstrongly protective' },
+  { id:'noins',     label:'No Health Insurance',    shap:.28,  color:'#ef4444', side:'right', icon:'🚫', desc:'Uninsured patients\n28% higher dropout risk' },
+  { id:'poverty',   label:'High Poverty Area',      shap:.22,  color:'#ef4444', side:'right', icon:'📍', desc:'Neighborhood poverty\nmultiplies other risks' },
+  { id:'depriv',    label:'Neighborhood Deprivation',shap:.26, color:'#ef4444', side:'right', icon:'🏚', desc:'Deprivation index\ncritical structural barrier' },
+  { id:'income',    label:'Low Median Income',       shap:.18, color:'#ef4444', side:'right', icon:'💸', desc:'Socioeconomic stress\nundermines adherence' },
+  { id:'dep',       label:'Clinical Depression',     shap:.24, color:'#ef4444', side:'right', icon:'🧠', desc:'Depression amplifies\nevery other risk factor' },
+  { id:'homeless',  label:'Homelessness (SDOH)',     shap:.41, color:'#ef4444', side:'right', icon:'⚠️', desc:'CRITICAL: homelessness\nexponential penalty' },
+  { id:'alcohol',   label:'Alcohol Use Disorder',    shap:.19, color:'#ef4444', side:'right', icon:'⚕️', desc:'Co-occurring AUD\ndestabilizes treatment' },
+];
+
+const baseScore = 0.18;
+let currentStep = -1;
+let scores = [baseScore];
+let timer = null;
+
+// build cumulative scores
+const cumScores = [baseScore];
+factors.forEach(f => {
+  cumScores.push(Math.min(0.98, Math.max(0.02, cumScores[cumScores.length-1] + f.shap * 0.8)));
+});
+
+// step dots
+const stepContainer = document.getElementById('stepDots');
+factors.forEach((f,i) => {
+  const d = document.createElement('div');
+  d.className = 'step-dot';
+  d.id = `sdot${i}`;
+  stepContainer.appendChild(d);
+});
+
+// Layout params
+const barH = 36;
+const barGap = 10;
+const forceBarMaxW = 320;
+
+// Central baseline line
+const baseX = cx;
+
+function initSvg() {
+  svg.selectAll('*').remove();
+
+  // central vertical axis
+  svg.append('line')
+    .attr('x1', baseX).attr('x2', baseX)
+    .attr('y1', 40).attr('y2', H - 60)
+    .style('stroke', 'rgba(255,255,255,.1)')
+    .style('stroke-dasharray', '4,4');
+
+  // baseline label
+  svg.append('text')
+    .attr('x', baseX).attr('y', 28)
+    .attr('text-anchor', 'middle')
+    .style('fill', 'rgba(255,255,255,.3)')
+    .style('font-size', '10px')
+    .style('font-family', 'JetBrains Mono, monospace')
+    .style('letter-spacing', '.12em')
+    .text('BASELINE RISK');
+
+  // left label
+  svg.append('text').attr('x', baseX - forceBarMaxW - 20).attr('y', 28)
+    .attr('text-anchor','end').style('fill','#22c55e').style('font-size','11px')
+    .style('font-weight','600').text('← PROTECTIVE');
+
+  // right label
+  svg.append('text').attr('x', baseX + forceBarMaxW + 20).attr('y', 28)
+    .attr('text-anchor','start').style('fill','#ef4444').style('font-size','11px')
+    .style('font-weight','600').text('DROPOUT RISK →');
+}
+
+function getBarY(i) {
+  const totalH = factors.length * (barH + barGap);
+  const startY = cy - totalH / 2 + 10;
+  return startY + i * (barH + barGap);
+}
+
+function addFactor(factorIdx) {
+  const f = factors[factorIdx];
+  const barW = Math.abs(f.shap) * forceBarMaxW;
+  const y = getBarY(factorIdx);
+  const isLeft = f.shap < 0;
+  const barX = isLeft ? baseX - barW : baseX;
+
+  const g = svg.append('g').attr('class', `factor-g factor-${f.id}`).style('opacity', 0);
+
+  // bar
+  g.append('rect')
+    .attr('x', baseX)
+    .attr('y', y)
+    .attr('width', 0)
+    .attr('height', barH)
+    .attr('rx', 4)
+    .style('fill', f.color)
+    .style('opacity', 0.85);
+
+  // icon
+  g.append('text')
+    .attr('x', isLeft ? baseX - 8 : baseX + barW + 8)
+    .attr('y', y + barH / 2 + 5)
+    .attr('text-anchor', isLeft ? 'end' : 'start')
+    .style('font-size', '15px')
+    .text(f.icon);
+
+  // label
+  g.append('text')
+    .attr('x', isLeft ? baseX - barW - 10 : baseX + barW + 32)
+    .attr('y', y + barH / 2 - 3)
+    .attr('text-anchor', isLeft ? 'end' : 'start')
+    .style('fill', '#fff').style('font-size', '12px').style('font-weight', '500')
+    .text(f.label);
+
+  // shap value
+  g.append('text')
+    .attr('x', isLeft ? baseX - barW / 2 : baseX + barW / 2)
+    .attr('y', y + barH / 2 + 5)
+    .attr('text-anchor', 'middle')
+    .style('fill', 'rgba(0,0,0,.7)').style('font-size', '10px')
+    .style('font-family', 'JetBrains Mono, monospace').style('font-weight', '500')
+    .text((f.shap > 0 ? '+' : '') + f.shap.toFixed(2));
+
+  // animate in
+  g.transition().duration(350).style('opacity', 1);
+
+  g.select('rect')
+    .transition().duration(600).ease(d3.easeCubicOut)
+    .attr('x', isLeft ? baseX - barW : baseX)
+    .attr('width', barW);
+
+  // Special explosion effect for homelessness
+  if (f.id === 'homeless') {
+    setTimeout(() => {
+      svg.append('circle')
+        .attr('cx', baseX + barW / 2).attr('cy', y + barH / 2)
+        .attr('r', 5).style('fill', 'none').style('stroke', '#ef4444').style('stroke-width', 2)
+        .transition().duration(800).ease(d3.easeExpOut)
+        .attr('r', 80).style('opacity', 0).remove();
+    }, 400);
+  }
+
+  // update score
+  const newScore = cumScores[factorIdx + 1];
+  const scoreEl = document.getElementById('riskScore');
+  const patBox = document.getElementById('patientBox');
+  scoreEl.textContent = (newScore * 100).toFixed(0) + '%';
+  scoreEl.style.color = newScore > 0.6 ? '#ef4444' : newScore > 0.35 ? '#f59e0b' : '#22c55e';
+  patBox.style.borderColor = newScore > 0.6 ? 'rgba(239,68,68,.4)' : newScore > 0.35 ? 'rgba(245,158,11,.3)' : 'rgba(255,255,255,.15)';
+}
+
+let stepInterval = null;
+function startAnimation() {
+  if (stepInterval) clearInterval(stepInterval);
+  currentStep = -1;
+  document.querySelectorAll('.step-dot').forEach(d => { d.className = 'step-dot'; });
+  document.getElementById('riskScore').textContent = (baseScore * 100).toFixed(0) + '%';
+  document.getElementById('riskScore').style.color = '#22c55e';
+  document.getElementById('patientBox').style.borderColor = 'rgba(255,255,255,.15)';
+  initSvg();
+
+  stepInterval = setInterval(() => {
+    currentStep++;
+    if (currentStep >= factors.length) {
+      clearInterval(stepInterval);
+      return;
+    }
+    // update dots
+    for(let i = 0; i < factors.length; i++) {
+      const d = document.getElementById(`sdot${i}`);
+      if(i < currentStep) d.className = 'step-dot done';
+      else if(i === currentStep) d.className = 'step-dot active';
+      else d.className = 'step-dot';
+    }
+    addFactor(currentStep);
+  }, 900);
+}
+
+window.addEventListener('load', () => { initSvg(); setTimeout(startAnimation, 500); });
+</script>
+</body>
+</html>
