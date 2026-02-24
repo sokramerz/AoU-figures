@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Slide 3 — Two Futures</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:#fff;font-family:'Inter',sans-serif;width:1280px;height:720px;overflow:hidden;position:relative}
+
+.bg-lines{position:absolute;inset:0;pointer-events:none;opacity:.3}
+
+/* vertical divider */
+.divider{position:absolute;left:50%;top:0;bottom:0;width:1px;background:linear-gradient(to bottom,transparent,rgba(255,255,255,.15) 20%,rgba(255,255,255,.15) 80%,transparent);z-index:5}
+.divider-label{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#000;border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:8px 18px;font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.4);z-index:6;white-space:nowrap}
+
+/* panels */
+.panel{position:absolute;top:0;bottom:0;width:50%;display:flex;flex-direction:column;padding:32px 40px}
+.panel.left{left:0}
+.panel.right{right:0}
+
+.panel-bg-left{position:absolute;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(34,197,94,.06) 0%,transparent 70%);pointer-events:none}
+.panel-bg-right{position:absolute;inset:0;background:radial-gradient(ellipse at 70% 50%,rgba(239,68,68,.1) 0%,transparent 70%);pointer-events:none}
+
+/* header */
+.slide-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:8px;opacity:.5}
+.slide-title{font-size:22px;font-weight:700;letter-spacing:-.3px;margin-bottom:4px}
+.slide-sub{font-size:13px;font-weight:300;color:rgba(255,255,255,.5)}
+
+/* patient card */
+.patient-card{margin:18px 0 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px}
+.patient-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.patient-info .name{font-size:13px;font-weight:600;margin-bottom:2px}
+.patient-info .detail{font-size:11px;color:rgba(255,255,255,.45)}
+.patient-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tag{font-size:10px;padding:3px 8px;border-radius:20px;border:1px solid;font-family:'JetBrains Mono',monospace}
+
+/* chart */
+.chart-area{flex:1;position:relative;min-height:0}
+
+/* outcome badge */
+.outcome{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:8px;opacity:0;transform:translateY(10px);transition:opacity .6s ease,transform .6s ease}
+.outcome.visible{opacity:1;transform:translateY(0)}
+.outcome-icon{font-size:24px}
+.outcome-text .big{font-size:20px;font-weight:700}
+.outcome-text .small{font-size:11px;color:rgba(255,255,255,.5);margin-top:1px}
+
+/* timeline ticks */
+.timeline{display:flex;align-items:center;gap:0;margin-bottom:8px;padding:0 10px}
+.tick{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.tick-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.2)}
+.tick-label{font-size:9px;color:rgba(255,255,255,.3);font-family:'JetBrains Mono',monospace}
+.tick-line{flex:1;height:1px;background:rgba(255,255,255,.08);align-self:center;margin:0 2px}
+
+/* top label */
+.top-header{position:absolute;top:20px;left:50%;transform:translateX(-50%);z-index:10;text-align:center}
+.top-header .act{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:rgba(255,255,255,.4);text-transform:uppercase;margin-bottom:4px}
+.top-header h1{font-size:15px;font-weight:600;letter-spacing:-.2px}
+
+/* replay btn */
+.replay{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:20;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;padding:7px 18px;border:1px solid rgba(255,255,255,.2);border-radius:4px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.6);cursor:pointer;transition:all .2s}
+.replay:hover{background:rgba(255,255,255,.1);color:#fff}
+
+/* key insight */
+.insight{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:30;background:#1a0808;border:1.5px solid #ef4444;border-radius:6px;padding:9px 22px;text-align:center;font-size:12.5px;white-space:nowrap;opacity:0;transition:opacity .8s ease;box-shadow:0 0 24px rgba(239,68,68,.25)}
+.insight.visible{opacity:1}
+.insight strong{color:#f87171}
+</style>
+</head>
+<body>
+
+<div class="top-header">
+  <div class="act">Act II · Disengagement Signature 1</div>
+  <h1>Same Patient — Two Futures</h1>
+</div>
+
+<div class="divider"></div>
+<div class="divider-label">Day 0 — Treatment Start</div>
+
+<!-- LEFT PANEL: No Depression -->
+<div class="panel left">
+  <div class="panel-bg-left"></div>
+  <div style="position:relative;z-index:2;display:flex;flex-direction:column;height:100%;padding-top:48px">
+    <div class="slide-label" style="color:#22c55e">Future A</div>
+    <div class="slide-title" style="color:#22c55e">No Depression</div>
+    <div class="slide-sub">Same missed visits. Gradual slope.</div>
+
+    <div class="patient-card">
+      <div class="patient-avatar" style="background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3)">🧑</div>
+      <div style="flex:1">
+        <div class="patient-info">
+          <div class="name">Patient A</div>
+          <div class="detail">Age 34 · OUD diagnosis · Buprenorphine Day 1</div>
+        </div>
+        <div class="patient-tags">
+          <span class="tag" style="border-color:rgba(34,197,94,.4);color:#86efac">No Depression</span>
+          <span class="tag" style="border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.5)">Insured</span>
+          <span class="tag" style="border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.5)">Moderate Deprivation</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline">
+      <div class="tick"><div class="tick-dot" id="tdA0" style="background:#22c55e"></div><div class="tick-label">T0</div></div>
+      <div class="tick-line"></div>
+      <div class="tick"><div class="tick-dot" id="tdA7"></div><div class="tick-label">Day 7</div></div>
+      <div class="tick-line"></div>
+      <div class="tick"><div class="tick-dot" id="tdA14"></div><div class="tick-label">Day 14</div></div>
+      <div class="tick-line"></div>
+      <div class="tick"><div class="tick-dot" id="tdA30"></div><div class="tick-label">Day 30</div></div>
+      <div class="tick-line"></div>
+      <div class="tick"><div class="tick-dot" id="tdA90"></div><div class="tick-label">Day 90</div></div>
+    </div>
+
+    <div class="chart-area"><svg id="chartA" width="100%" height="100%"></svg></div>
+
+    <div class="outcome" id="outcomeA" style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25)">
+      <div class="outcome-icon">✅</div>
+      <div class="outcome-text">
+        <div class="big" style="color:#22c55e">Retained at 90 Days</div>
+        <div class="small">Retention probability: <strong style="color:#86efac">82%</strong> — gradual decline, recoverable</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT PANEL: With Depression -->
+<div class="panel right">
+  <div class="panel-bg-right"></div>
+  <div style="position:relative;z-index:2;display:flex;flex-direction:column;height:100%;padding-top:48px">
+    <div class="slide-label" style="color:#ef4444">Future B</div>
+    <div class="slide-title" style="color:#ef4444">With Depression</div>
+    <div class="slide-sub">Same missed visits. The cliff.</div>
+
+    <div class="patient-card">
+      <div class="patient-avatar" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3)">🧑</div>
+      <div style="flex:1">
+        <div class="patient-info">
+          <div class="name">Patient B — Identical Profile</div>
+          <div class="detail">Age 34 · OUD diagnosis · Buprenorphine Day 1</div>
+        </div>
+        <div class="patient-tags">
+          <span class="tag" style="border-color:rgba(239,68,68,.5);color:#fca5a5">Clinical Depression</span>
+          <span class="tag" style="border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.5)">Insured</span>
+          <span class="tag" style="border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.5)">Moderate Deprivation</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline">
+      <div class="tick"><div class="tick-dot" id="tdB0" style="background:#ef4444"></div><div class="tick-label">T0</div></div>
+      <div class="tick-line"></div>
+      <div class="tick"><div class="tick-dot" id="tdB7"></div><div class="tick-label">Day 7</div></div>
+      <div class="tick-line"></div>
+      <div class="tick"><div class="tick-dot" id="tdB14"></div><div class="tick-label">Day 14</div></div>
+      <div class="tick-line"></div>
+      <div class="tick"><div class="tick-dot" id="tdB30"></div><div class="tick-label">Day 30</div></div>
+      <div class="tick-line"></div>
+      <div class="tick"><div class="tick-dot" id="tdB90"></div><div class="tick-label">Day 90</div></div>
+    </div>
+
+    <div class="chart-area"><svg id="chartB" width="100%" height="100%"></svg></div>
+
+    <div class="outcome" id="outcomeB" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25)">
+      <div class="outcome-icon">⚠️</div>
+      <div class="outcome-text">
+        <div class="big" style="color:#ef4444">Disengaged by Day 45</div>
+        <div class="small">Retention probability: <strong style="color:#fca5a5">31%</strong> — behavioral signal amplified 3×</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="insight" id="insight">
+  The <strong>exact same missed visits</strong> cause 3× greater dropout risk when depression is present
+</div>
+
+<button class="replay" onclick="runAnimation()">↺ &nbsp;REPLAY</button>
+
+<script>
+const W_A = document.getElementById('chartA').getBoundingClientRect().width || 540;
+const H_chart = 200;
+
+function drawChart(svgEl, color, points, cliffAt, label) {
+  const svg = d3.select(svgEl);
+  svg.selectAll('*').remove();
+  const W = svgEl.getBoundingClientRect().width || 520;
+  const H = svgEl.getBoundingClientRect().height || 190;
+  const m = {top:10,right:20,bottom:30,left:42};
+  const iW = W - m.left - m.right;
+  const iH = H - m.top - m.bottom;
+
+  const g = svg.append('g').attr('transform',`translate(${m.left},${m.top})`);
+
+  const x = d3.scaleLinear().domain([0,90]).range([0,iW]);
+  const y = d3.scaleLinear().domain([0,100]).range([iH,0]);
+
+  // grid
+  g.append('g').selectAll('line').data(y.ticks(4)).enter().append('line')
+    .attr('x1',0).attr('x2',iW).attr('y1',d=>y(d)).attr('y2',d=>y(d))
+    .style('stroke','rgba(255,255,255,.06)').style('stroke-dasharray','3,3');
+
+  // axes
+  g.append('g').attr('transform',`translate(0,${iH})`).call(
+    d3.axisBottom(x).ticks(5).tickFormat(d=>'D'+d)
+  ).call(a=>{a.select('.domain').remove();a.selectAll('line').remove();
+    a.selectAll('text').style('fill','rgba(255,255,255,.3)').style('font-size','9px')});
+
+  g.append('g').call(d3.axisLeft(y).ticks(4).tickFormat(d=>d+'%'))
+    .call(a=>{a.select('.domain').remove();a.selectAll('line').remove();
+      a.selectAll('text').style('fill','rgba(255,255,255,.3)').style('font-size','9px')});
+
+  // y label
+  g.append('text').attr('transform',`translate(-32,${iH/2}) rotate(-90)`)
+    .style('fill','rgba(255,255,255,.25)').style('font-size','9px')
+    .attr('text-anchor','middle').text('Retention Prob.');
+
+  // cliff zone
+  if (cliffAt) {
+    g.append('rect')
+      .attr('x', x(cliffAt[0])).attr('y', 0)
+      .attr('width', x(cliffAt[1]) - x(cliffAt[0]))
+      .attr('height', iH)
+      .style('fill','rgba(239,68,68,.06)')
+      .style('opacity', 0)
+      .transition().delay(1400).duration(600)
+      .style('opacity',1);
+    g.append('text')
+      .attr('x', x((cliffAt[0]+cliffAt[1])/2)).attr('y', 14)
+      .attr('text-anchor','middle')
+      .style('fill','rgba(239,68,68,.5)').style('font-size','9px')
+      .style('font-family','JetBrains Mono, monospace').style('letter-spacing','.1em')
+      .style('opacity',0).text('THE CLIFF')
+      .transition().delay(1600).duration(600).style('opacity',1);
+  }
+
+  // area
+  const area = d3.area().x(d=>x(d[0])).y0(iH).y1(d=>y(d[1])).curve(d3.curveCatmullRom.alpha(0.5));
+  const areaPath = g.append('path').datum(points)
+    .style('fill', color === '#22c55e' ? 'rgba(34,197,94,.08)' : 'rgba(239,68,68,.08)')
+    .attr('d', area);
+
+  // line
+  const line = d3.line().x(d=>x(d[0])).y(d=>y(d[1])).curve(d3.curveCatmullRom.alpha(0.5));
+  const path = g.append('path').datum(points)
+    .style('fill','none').style('stroke', color)
+    .style('stroke-width', 2.5).style('stroke-linecap','round');
+
+  const totalLen = (function(){
+    path.attr('d', line);
+    return path.node().getTotalLength();
+  })();
+
+  path.attr('stroke-dasharray', totalLen)
+    .attr('stroke-dashoffset', totalLen)
+    .transition().duration(2000).ease(d3.easeCubicInOut)
+    .attr('stroke-dashoffset', 0);
+
+  // dots at key moments
+  const keyPts = points.filter(p => [0,14,30,45,90].includes(p[0]));
+  g.selectAll('.kd').data(keyPts).enter().append('circle')
+    .attr('cx', d=>x(d[0])).attr('cy', d=>y(d[1]))
+    .attr('r', 4).style('fill', color).style('stroke','#000').style('stroke-width',2)
+    .style('opacity',0)
+    .transition().delay((d,i)=>800+i*300).duration(300)
+    .style('opacity',1);
+
+  // missed visit markers
+  [7,14].forEach((day,i) => {
+    g.append('line')
+      .attr('x1',x(day)).attr('x2',x(day))
+      .attr('y1',0).attr('y2',iH)
+      .style('stroke','rgba(251,191,36,.4)').style('stroke-dasharray','4,3')
+      .style('stroke-width',1).style('opacity',0)
+      .transition().delay(600+i*200).duration(400).style('opacity',1);
+    g.append('text')
+      .attr('x',x(day)+4).attr('y',20)
+      .style('fill','rgba(251,191,36,.5)').style('font-size','8px')
+      .style('font-family','JetBrains Mono, monospace')
+      .style('opacity',0).text('Missed')
+      .transition().delay(800+i*200).duration(400).style('opacity',1);
+  });
+}
+
+// Data: No depression — gentle slope
+const ptsA = [[0,95],[7,88],[14,82],[21,78],[30,74],[45,70],[60,67],[75,65],[90,63]];
+// Data: With depression — cliff after missed visits
+const ptsB = [[0,95],[7,85],[14,70],[21,52],[30,38],[45,28],[60,22],[75,20],[90,18]];
+
+let animated = false;
+
+function runAnimation() {
+  animated = true;
+  document.getElementById('outcomeA').classList.remove('visible');
+  document.getElementById('outcomeB').classList.remove('visible');
+  document.getElementById('insight').classList.remove('visible');
+
+  // reset timeline dots
+  ['A','B'].forEach(p => {
+    [0,7,14,30,90].forEach(d => {
+      const el = document.getElementById(`td${p}${d === 0 ? '0' : d}`);
+      if(el && d !== 0) { el.style.background = 'rgba(255,255,255,.2)'; }
+    });
+  });
+
+  setTimeout(()=>{ drawChart(document.getElementById('chartA'), '#22c55e', ptsA, null, 'A');
+                   drawChart(document.getElementById('chartB'), '#ef4444', ptsB, [10,25], 'B'); }, 100);
+
+  // light up timeline dots
+  const timings = [[7,700],[14,1100],[30,1600],[90,2200]];
+  timings.forEach(([day, delay]) => {
+    setTimeout(()=>{
+      const elA = document.getElementById(`tdA${day}`);
+      const elB = document.getElementById(`tdB${day}`);
+      if(elA) elA.style.background = '#22c55e';
+      if(elB) elB.style.background = day <= 14 ? 'rgba(251,191,36,.8)' : '#ef4444';
+    }, delay);
+  });
+
+  setTimeout(()=>{ document.getElementById('outcomeA').classList.add('visible'); }, 2600);
+  setTimeout(()=>{ document.getElementById('outcomeB').classList.add('visible'); }, 2900);
+  setTimeout(()=>{ document.getElementById('insight').classList.add('visible'); }, 3400);
+}
+
+window.addEventListener('load', ()=>{ setTimeout(runAnimation, 400); });
+</script>
+</body>
+</html>
